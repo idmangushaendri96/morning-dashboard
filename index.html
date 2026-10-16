@@ -1150,11 +1150,10 @@ td.sev-n { border-left: 3px solid transparent; }
       </div>
 
       <div class="stat-row">
-        <div class="stat-m"><div class="sm-lbl">ICU</div><div class="sm-val r">2</div><div class="sm-sub">4 TT · penuh</div></div>
-        <div class="stat-m"><div class="sm-lbl">NICU</div><div class="sm-val o">2</div><div class="sm-sub">4 TT · 1 kosong</div></div>
-        <div class="stat-m"><div class="sm-lbl">PICU</div><div class="sm-val b">1</div><div class="sm-sub">2 TT · 1 kosong</div></div>
-        <div class="stat-m"><div class="sm-lbl">Ventilator</div><div class="sm-val o">1/2</div><div class="sm-sub">1 unit rusak</div></div>
-      </div>
+        <div class="stat-m"><div class="sm-lbl">ICU</div><div class="sm-val r">2</div></div>
+        <div class="stat-m"><div class="sm-lbl">NICU</div><div class="sm-val o">2</div></div>
+        <div class="stat-m"><div class="sm-lbl">PICU</div><div class="sm-val b">1</div></div>
+              </div>
 
       <div class="card">
         <div class="tbl-wrap">
@@ -2157,8 +2156,6 @@ function updateCounts() {
   [['ICU'],['NICU'],['PICU']].forEach(([u], i) => {
     if (!it[i]) return;
     it[i].querySelector('.sm-val').textContent = unitN(u);
-    const bd = BEDS.find(b => b.ruangan === u);
-    it[i].querySelector('.sm-sub').textContent = 'pasien aktif' + (bd ? ` · ${bd.kosong} TT kosong` : '');
   });
   // Kotak statistik: Rencana Operasi
   const ot = document.querySelectorAll('#sec-operasi .stat-m');
