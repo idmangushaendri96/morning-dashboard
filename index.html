@@ -1352,7 +1352,7 @@ td.sev-n { border-left: 3px solid transparent; }
 <script>
 // ── DUMMY DATA ──────────────────────────────────────────────
 
-const BOR_TREND = {
+let BOR_TREND = {
   labels: ['1/10','2/10','3/10','4/10','5/10','6/10','7/10','8/10','9/10','10/10','11/10','12/10','13/10','14/10','15/10'],
   bor:    [100, 88, 94, 92, 86, 78, 100, 100, 100, 100, 100, 100, 80, 83, 84],
   igd:    [33,  37, 29, 27, 43, 39, 45,  42,  42,  32,  26,  42,  35, 40, 32]
@@ -1614,7 +1614,7 @@ function renderDmDhf() {
       <td class="tc ts">${p.no}</td>
       <td>
         <div class="tn">${p.nama}</div>
-        <div class="ts">${p.usia} thn · ${eselonBadge(p.eselon)}</div>
+        <div class="ts">${p.usia ? p.usia + ' thn · ' : ''}${eselonBadge(p.eselon)}</div>
       </td>
       <td><span class="badge b-spec">${p.ruangan}</span></td>
       <td class="td">${p.diag}</td>
@@ -2141,10 +2141,110 @@ function updateCounts() {
     ot[1].querySelector('.sm-sub').textContent = 'tindakan darurat';
     ot[2].querySelector('.sm-val').textContent = n.operasi;
   }
+  // Pill kartu Ringkasan: indikator, rentang grafik, tempat tidur kosong
+  const cardPill = id => document.getElementById(id)?.closest('.card')?.querySelector('.card-pill');
+  const pI = cardPill('tbody-operasional'); if (pI) pI.textContent = `${OPERASIONAL.length} Indikator`;
+  const pC = cardPill('bor-chart'); if (pC && BOR_TREND.labels.length) pC.textContent = `${BOR_TREND.labels[0]} – ${BOR_TREND.labels[BOR_TREND.labels.length-1]}`;
+  const pB = cardPill('bed-grid'); if (pB) pB.textContent = `${BEDS.reduce((a,b)=>a+(b.kosong||0),0)} TT kosong`;
   // Pill Meninggal & Rujuk
   const pills = document.querySelectorAll('#sec-laporan .card-pill');
   if (pills[0]) pills[0].textContent = `${MENINGGAL.length} Pasien`;
   if (pills[1]) pills[1].textContent = `${RUJUK.length} Pasien`;
+}
+
+
+// ══ DATA HARIAN: satu tab (1 baris/hari) → kartu KPI, grafik BOR Trend, tabel Operasional ══
+// Target per indikator (ubah di sini bila target RS berubah)
+const IND = [
+  {id:'bor',   label:'BOR',                       re:/^BOR/,                              tH:73.9, tM:73.9,  mode:'avg', unit:'%'},
+  {id:'pasien',label:'Jumlah Pasien',             re:/^JumlahPasien$/,                    tH:null,  tM:null,  mode:'avg', hidden:true},
+  {id:'ci',    label:'Pasien Check-in Ranap',     re:/Checkin/i,                          tH:28,    tM:828,   mode:'sum'},
+  {id:'avlos', label:'AVLOS',                     re:/^AVLOS$/,                           tH:2.9,   tM:2.9,   mode:'avg', unit:' hr', avlos:true},
+  {id:'igd',   label:'Kunjungan IGD',             re:/^(JumlahPasienIGD|PasienIGD)$/,     tH:38,    tM:1128,  mode:'sum'},
+  {id:'konv',  label:'Konversi IGD → Ranap',      derived:r => (r.igd>0 && r.ci!=null) ? r.ci/r.igd*100 : null, tH:50, tM:50, mode:'avg', unit:'%'},
+  {id:'rj',    label:'Kunjungan Rawat Jalan',     re:/RawatJalan|^RJ$/,                   tH:192,   tM:5702,  mode:'sum'},
+  {id:'mcu',   label:'Kunjungan MCU',             re:/MCU/,                               tH:50,    tM:1485,  mode:'sum'},
+  {id:'hd',    label:'Kunjungan HD',              re:/HD$/,                               tH:16,    tM:475,   mode:'sum'},
+  {id:'partus',label:'Kelahiran',                 re:/^(JumlahPartus|Partus)$/,           tH:3,     tM:89,    mode:'sum'},
+  {id:'ok',    label:'Kunjungan Kamar Bedah',     re:/KamarBedah/,                        tH:6,     tM:178,   mode:'sum'},
+  {id:'pen',   label:'Kunjungan Penunjang Medis', re:/Penunjang/,                         tH:962,   tM:28571, mode:'sum'},
+];
+function parseDateID(s) {
+  s = (s || '').trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return new Date(+m[1], +m[2]-1, +m[3]);
+  if ((m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/))) return new Date(+m[3], +m[2]-1, +m[1]);
+  return null;
+}
+const numOf = v => { const n = parseFloat(String(v ?? '').replace('%','').replace(',','.')); return isNaN(n) ? null : n; };
+function buildDaily(rows) {
+  const out = [];
+  rows.forEach(r => {
+    const d = parseDateID(r.Tanggal);
+    if (!d) return;
+    const row = { date: d, tgl: r.Tanggal };
+    IND.forEach(ind => {
+      if (ind.derived) return;
+      const k = Object.keys(r).find(k => ind.re.test(k));
+      let v = k ? numOf(r[k]) : null;
+      if (ind.id === 'bor' && v != null && v > 0 && v <= 1) v *= 100;   // 0.74 → 74
+      row[ind.id] = v;
+    });
+    IND.forEach(ind => { if (ind.derived) row[ind.id] = ind.derived(row); });
+    out.push(row);
+  });
+  out.sort((a,b) => a.date - b.date);
+  // satu baris per tanggal: jika ganda, ambil yang paling bawah
+  return out.filter((r,i) => !out[i+1] || out[i+1].date.getTime() !== r.date.getTime());
+}
+function applyDaily(daily) {
+  const L = daily[daily.length-1], P = daily[daily.length-2];
+  const fmtN = (v, dec=0) => v == null ? '-' : v.toLocaleString('id-ID', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+  // Kartu KPI (urutan: BOR, Jumlah Pasien, AVLOS, IGD, RJ, HD/MCU)
+  const cards = document.querySelectorAll('.kpi-card');
+  const setCard = (i, html, cur, prev, dec, unit) => {
+    const c = cards[i]; if (!c) return;
+    c.querySelector('.kpi-val').innerHTML = html;
+    const d = c.querySelector('.kpi-delta');
+    if (cur == null || prev == null) { d.className = 'kpi-delta eq'; d.textContent = ''; return; }
+    const diff = +(cur - prev).toFixed(dec);
+    d.className = 'kpi-delta ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : 'eq');
+    d.textContent = diff === 0 ? '= sama vs kemarin' : `${diff > 0 ? '▲' : '▼'} ${fmtN(Math.abs(diff), dec)}${unit||''} vs kemarin`;
+  };
+  const p = P || {};
+  setCard(0, `${fmtN(L.bor,1)}<span class="kpi-unit">%</span>`, L.bor, p.bor, 1, '%');
+  setCard(1, fmtN(L.pasien), L.pasien, p.pasien, 0, '');
+  setCard(2, `${fmtN(L.avlos,1)}<span class="kpi-unit">hr</span>`, L.avlos, p.avlos, 1, '');
+  setCard(3, fmtN(L.igd), L.igd, p.igd, 0, '');
+  setCard(4, fmtN(L.rj), L.rj, p.rj, 0, '');
+  setCard(5, `${fmtN(L.hd)} / ${fmtN(L.mcu)}`, L.hd, p.hd, 0, '');
+  // Tabel Operasional: nilai terbaru + target + % capaian + akumulasi bulan berjalan (MTD)
+  const mtd = daily.filter(r => r.date.getFullYear() === L.date.getFullYear() && r.date.getMonth() === L.date.getMonth());
+  OPERASIONAL.splice(0, OPERASIONAL.length, ...IND.filter(i => !i.hidden).map(ind => {
+    const cur = L[ind.id];
+    const vals = mtd.map(r => r[ind.id]).filter(v => v != null);
+    const ytd = !vals.length ? null : ind.mode === 'sum' ? vals.reduce((a,b)=>a+b,0) : vals.reduce((a,b)=>a+b,0)/vals.length;
+    const dec = (ind.id === 'bor' || ind.id === 'avlos' || ind.id === 'konv') ? 1 : 0;
+    const u = ind.unit || '';
+    const pct = (v, t) => v == null || !t ? '-' : (v / t * 100).toFixed(1) + '%';
+    return {
+      label: ind.label,
+      tgtH: fmtN(ind.tH, ind.tH % 1 ? 1 : 0) + u, tgtM: fmtN(ind.tM, ind.tM % 1 ? 1 : 0) + u,
+      curr: cur == null ? '-' : fmtN(cur, dec) + u, perf: pct(cur, ind.tH),
+      ytd: ytd == null ? '-' : fmtN(ytd, dec) + (ind.mode === 'avg' ? u : ''), perfYtd: pct(ytd, ind.tM),
+      avlos: !!ind.avlos,
+    };
+  }));
+  // Grafik BOR Trend: 15 hari terakhir (renderChart membangun ulang dari BOR_TREND)
+  const last = daily.slice(-15);
+  BOR_TREND = {
+    labels: last.map(r => String(r.date.getDate()).padStart(2,'0') + '/' + String(r.date.getMonth()+1).padStart(2,'0')),
+    bor: last.map(r => r.bor == null ? null : +r.bor.toFixed(1)),
+    igd: last.map(r => r.igd == null ? 0 : r.igd),
+  };
+  // Tanggal data terbaru → subjudul Ringkasan
+  const txt = 'Data per ' + L.date.toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'});
+  const ov = document.getElementById('sec-overview'); if (ov) ov.dataset.sub = txt;
+  if (ov && ov.classList.contains('active')) { const sub = document.getElementById('sec-sub'); if (sub) sub.textContent = txt; }
 }
 
 // ── STATUS BANNER ──────────────────────────────────────────
@@ -2181,26 +2281,33 @@ async function loadFromSheets() {
   showBanner('⏳ Mengambil data dari Google Sheets…', 'loading');
   try {
     // Fetch semua tab secara paralel
+    // Tab opsional (boleh dihapus dari Google Sheets): gagal → dianggap kosong, tidak merusak yang lain
+    const fetchOpt = n => fetchSheet(n).catch(e => { console.warn('Tab opsional dilewati:', n, e.message); return ''; });
     const [csvOps, csvKPI, csvPerhatian, csvICU, csvKendala,
-           csvMeninggal, csvRujuk, csvTrend, csvBeds, csvOperasi, csvPulang] = await Promise.all([
-      fetchSheet('Operasional'),
-      fetchSheet('KPI_Header'),
+           csvMeninggal, csvRujuk, csvTrend, csvBeds, csvOperasi, csvPulang, csvDM] = await Promise.all([
+      fetchOpt('Operasional'),
+      fetchOpt('KPI_Header'),
       fetchSheet('Pasien_Perhatian'),
       fetchSheet('ICU'),
       fetchSheet('Kendala'),
       fetchSheet('Meninggal'),
       fetchSheet('Rujuk'),
-      fetchSheet('BOR_Trend'),
+      fetchOpt('BOR_Trend'),
       fetchSheet('Tempat_Tidur'),
       fetchSheet('Rencana_Operasi'),
       fetchSheet('Prediksi_Pulang'),
+      fetchOpt('DM_DHF'),
     ]);
+
+    // ── Data harian (SATU tab: BOR_Trend, 1 baris per hari) → KPI, grafik, tabel Operasional ──
+    const daily = buildDaily(csvToObjects(parseCSV(csvTrend)));
+    if (daily.length) applyDaily(daily);
 
     // ── Operasional ───────────────────────────
     // Sheet columns: No, Indikator, Nilai_Terbaru (or "Nilai Terbaru"→NilaiTerbaru), Tanggal
     // Also supports extended format: Target_Harian, Target_Bulanan, Current, Perform_Pct, YTD
     const opsRows = csvToObjects(parseCSV(csvOps));
-    if (opsRows.length) {
+    if (!daily.length && opsRows.length) {
       OPERASIONAL.splice(0, OPERASIONAL.length, ...opsRows.map(r => ({
         label:   r.Indikator || '',
         tgtH:    r.Target_Harian || '',
@@ -2217,7 +2324,7 @@ async function loadFromSheets() {
     // Kolom sheet (setelah sanitize): Tanggal, BOR, JumlahPasien, AVLOS,
     //   PasienIGD, RJ, MCU, HD, Partus, SC, PN, KamarBedah, Penunjang
     const kpi = csvToObjects(parseCSV(csvKPI));
-    if (kpi.length) {
+    if (!daily.length && kpi.length) {
       const k = kpi[kpi.length - 1];
       const cards = document.querySelectorAll('.kpi-card');
 
@@ -2275,7 +2382,7 @@ async function loadFromSheets() {
 
     // ── Pasien Perhatian ──────────────────────
     const pRows = csvToObjects(parseCSV(csvPerhatian));
-    if (pRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       PERHATIAN.splice(0, PERHATIAN.length, ...pRows.map((r,i) => ({
         no: r.No || r.NO || i+1,
         nama: r.Nama || r.NAMAPASIEN || '',
@@ -2293,7 +2400,7 @@ async function loadFromSheets() {
 
     // ── ICU ───────────────────────────────────
     const icuRows = csvToObjects(parseCSV(csvICU));
-    if (icuRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       ICU_DATA.splice(0, ICU_DATA.length, ...icuRows.map((r,i) => {
         const pNo = parseInt(r.No) || i+1;
         return {
@@ -2307,7 +2414,7 @@ async function loadFromSheets() {
 
     // ── Kendala ───────────────────────────────
     const kRows = csvToObjects(parseCSV(csvKendala));
-    if (kRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       KENDALA.splice(0, KENDALA.length, ...kRows.map(r => ({
         // Supports both "clean" column names (Judul, Deskripsi, RTL) and
         // original CAPS format: JENIS KENDALA→JENISKENDALA, RENCANA TINDAK LANJUT→RENCANATINDAKLANJUT
@@ -2321,7 +2428,7 @@ async function loadFromSheets() {
 
     // ── Meninggal & Rujuk ─────────────────────
     const mRows = csvToObjects(parseCSV(csvMeninggal));
-    if (mRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       MENINGGAL.splice(0, MENINGGAL.length, ...mRows.map(r => ({
         // Supports NAMA PASIEN→NAMAPASIEN, RUANGAN, DIAGNOSA, JAM MENINGGAL→JAMMENINGGAL
         nama: r.Nama || r.NAMAPASIEN || '',
@@ -2332,7 +2439,7 @@ async function loadFromSheets() {
       })));
     }
     const rRows = csvToObjects(parseCSV(csvRujuk));
-    if (rRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       RUJUK.splice(0, RUJUK.length, ...rRows.map(r => ({
         // Supports NAMA PASIEN→NAMAPASIEN, DIAGNOSA, RUMAH SAKIT RUJUKAN→RUMAHSAKITRUJUKAN, ALASAN RUJUK→ALASANRUJUK
         nama: r.Nama || r.NAMAPASIEN || '',
@@ -2346,16 +2453,15 @@ async function loadFromSheets() {
     // BOR values may be stored as decimal (0.94) or percentage (94); normalize to %
     const normBOR = v => { const n = parseFloat(v)||0; return n > 0 && n <= 1 ? n * 100 : n; };
     const tRows = csvToObjects(parseCSV(csvTrend));
-    if (tRows.length && window._borChart) {
-      window._borChart.data.labels = tRows.map(r => r.Tanggal);
-      window._borChart.data.datasets[0].data = tRows.map(r => normBOR(r.BOR));
-      window._borChart.data.datasets[1].data = tRows.map(r => parseFloat(r.JumlahPasienIGD)||0);
-      window._borChart.update();
+    if (!daily.length && tRows.length) {
+      BOR_TREND.labels = tRows.map(r => r.Tanggal);
+      BOR_TREND.bor = tRows.map(r => normBOR(r.BOR));
+      BOR_TREND.igd = tRows.map(r => parseFloat(r.JumlahPasienIGD)||0);
     }
 
     // ── Tempat Tidur ──────────────────────────
     const bedRows = csvToObjects(parseCSV(csvBeds));
-    if (bedRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       // Abaikan baris sisa/judul (mis. "Tempat Tidur yang kosong") & baris tanpa nama ruangan
       BEDS.splice(0, BEDS.length, ...bedRows
         .filter(r => (r.RuanganKelas || r.Nama_Ruangan || '').trim() && !/tempat\s*tidur/i.test(r.RuanganKelas || r.Nama_Ruangan))
@@ -2367,9 +2473,28 @@ async function loadFromSheets() {
       })));
     }
 
+    // ── DM / DHF Khusus ───────────────────────
+    // Kolom sheet: NO, TANGGAL, NAMA PASIEN, Tgl lahir, ESELON, TANGGAL MRS, RUANGAN, DIAGNOSA, DPJP,
+    //   ANAMNESIS/PEMERIKSAAN FISIK, PEMERIKSAAN PENUNJANG, update TERAPI RUANGAN, FOLLOW UP
+    {
+      const col = (r, ...res) => { for (const re of res) { const k = Object.keys(r).find(k => re.test(k)); if (k && r[k]) return r[k]; } return ''; };
+      const dmRows = csvToObjects(parseCSV(csvDM)).filter(r => col(r, /NAMAPASIEN|^Nama/i));
+      DM_DHF.splice(0, DM_DHF.length, ...dmRows.map((r,i) => ({
+        no: col(r, /^NO$/i) || i+1,
+        nama: col(r, /NAMAPASIEN|^Nama/i),
+        usia: col(r, /^Usia$/i) || calcAge(col(r, /lahir/i)),
+        eselon: col(r, /ESELON/i),
+        ruangan: col(r, /RUANGAN$/i).trim(),
+        diag: col(r, /DIAGNOSA/i),
+        dpjp: col(r, /DPJP/i),
+        lab: col(r, /PENUNJANG/i, /ANAMNESIS/i),
+        terapi: [col(r, /TERAPI/i), col(r, /FOLLOWUP/i)].filter(Boolean).join(' · '),
+      })));
+    }
+
     // ── Rencana Operasi ───────────────────────
     const opRows = csvToObjects(parseCSV(csvOperasi));
-    if (opRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       OPERASI.splice(0, OPERASI.length, ...opRows.map((r,i) => ({
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
@@ -2379,7 +2504,7 @@ async function loadFromSheets() {
 
     // ── Prediksi Pulang ───────────────────────
     const plRows = csvToObjects(parseCSV(csvPulang));
-    if (plRows.length) {
+    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       PULANG.splice(0, PULANG.length, ...plRows.map((r,i) => ({
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
