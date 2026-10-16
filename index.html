@@ -1640,7 +1640,7 @@ function renderPulang() {
       <td class="tc ts">${p.no}</td>
       <td>
         <div class="tn">${p.nama}</div>
-        <div class="ts">${eselonBadge(p.eselon)}</div>
+        <div class="ts">${p.usia ? p.usia + ' thn · ' : ''}${eselonBadge(p.eselon)}</div>
       </td>
       <td><span class="badge b-spec">${p.ruangan}</span></td>
       <td class="td">${p.diag}</td>
@@ -2549,6 +2549,7 @@ async function loadFromSheets() {
     { // tab kosong = daftar kosong (jangan tampilkan data contoh)
       PULANG.splice(0, PULANG.length, ...plRows.map((r,i) => ({
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
+        usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
         mrs: r.MRS_Tgl, los: r.LOS || 0,
       })));
