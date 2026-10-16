@@ -1992,7 +1992,7 @@ function renderOperasional() {
 
 const SHEETS_CONFIG = {
   ENABLED:  true,
-  SHEET_ID: "1lDp-KmM61gajkePkFqUWTYQuwZG-7eBP",
+  SHEET_ID: "1fic9b499vzjyFJD6_yCxC9etmU6BM0nIh5dmB9eRntA",
   BASE_URL: "https://docs.google.com/spreadsheets/d/",
 };
 
@@ -2071,7 +2071,7 @@ async function loadFromSheets() {
   try {
     // Fetch semua tab secara paralel
     const [csvOps, csvKPI, csvPerhatian, csvICU, csvKendala,
-           csvMeninggal, csvRujuk, csvTrend, csvBeds] = await Promise.all([
+           csvMeninggal, csvRujuk, csvTrend, csvBeds, csvOperasi, csvPulang] = await Promise.all([
       fetchSheet('Operasional'),
       fetchSheet('KPI_Header'),
       fetchSheet('Pasien_Perhatian'),
@@ -2081,19 +2081,23 @@ async function loadFromSheets() {
       fetchSheet('Rujuk'),
       fetchSheet('BOR_Trend'),
       fetchSheet('Tempat_Tidur'),
+      fetchSheet('Rencana_Operasi'),
+      fetchSheet('Prediksi_Pulang'),
     ]);
 
     // ── Operasional ───────────────────────────
+    // Sheet columns: No, Indikator, Nilai_Terbaru (or "Nilai Terbaru"→NilaiTerbaru), Tanggal
+    // Also supports extended format: Target_Harian, Target_Bulanan, Current, Perform_Pct, YTD
     const opsRows = csvToObjects(parseCSV(csvOps));
     if (opsRows.length) {
       OPERASIONAL.splice(0, OPERASIONAL.length, ...opsRows.map(r => ({
-        label:   r.Indikator,
-        tgtH:    r.Target_Harian,
-        tgtM:    r.Target_Bulanan,
-        curr:    r.Current,
-        perf:    r.Perform_Pct,
-        ytd:     r.YTD,
-        perfYtd: r.Perform_YTD_Pct,
+        label:   r.Indikator || '',
+        tgtH:    r.Target_Harian || '',
+        tgtM:    r.Target_Bulanan || '',
+        curr:    r.Current || r.NilaiTerbaru || r.Nilai_Terbaru || '',
+        perf:    r.Perform_Pct || '',
+        ytd:     r.YTD || '',
+        perfYtd: r.Perform_YTD_Pct || '',
         avlos:   r.Is_AVLOS === 'TRUE',
       })));
     }
@@ -2103,9 +2107,11 @@ async function loadFromSheets() {
     if (kpi.length) {
       const k = kpi[kpi.length - 1];
       const setKPI = (sel, val) => { const el=document.querySelector(sel); if(el) el.textContent=val; };
-      // BOR card
+      // BOR card — normalize decimal (0.94) or percentage (94) to display as e.g. "94"
+      const borRaw = parseFloat((k.BOR||'').replace('%',''))||0;
+      const borDisplay = borRaw > 0 && borRaw <= 1 ? (borRaw * 100).toFixed(1) : borRaw.toFixed(1);
       document.querySelectorAll('.kpi-card')[0]?.querySelector('.kpi-val')?.childNodes[0] &&
-        (document.querySelectorAll('.kpi-card')[0].querySelector('.kpi-val').firstChild.textContent = k.BOR?.replace('%','') || '');
+        (document.querySelectorAll('.kpi-card')[0].querySelector('.kpi-val').firstChild.textContent = borDisplay);
       // Update delta texts dynamically
       const cards = document.querySelectorAll('.kpi-card');
       if (cards[2]) cards[2].querySelector('.kpi-val').innerHTML = `${k.AVLOS}<span class="kpi-unit">hr</span>`;
@@ -2121,9 +2127,16 @@ async function loadFromSheets() {
     const pRows = csvToObjects(parseCSV(csvPerhatian));
     if (pRows.length) {
       PERHATIAN.splice(0, PERHATIAN.length, ...pRows.map((r,i) => ({
-        no: r.No || i+1, nama: r.Nama, usia: r.Usia, eselon: r.Eselon,
-        ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
-        sev: (r.Severity||'ok').toLowerCase(), soap: r.SOAP, fu: r.Follow_Up,
+        no: r.No || r.NO || i+1,
+        nama: r.Nama || r.NAMAPASIEN || '',
+        usia: r.Usia || '',
+        eselon: r.Eselon || r.ESELON || '',
+        ruangan: r.Ruangan || r.RUANGAN || '',
+        diag: r.Diagnosa || r.DIAGNOSA || '',
+        dpjp: r.DPJP || '',
+        sev: (r.Severity||'ok').toLowerCase(),
+        soap: r.SOAP || '',
+        fu: r.Follow_Up || r.FOLLOWUP || '',
       })));
     }
 
@@ -2145,8 +2158,13 @@ async function loadFromSheets() {
     const kRows = csvToObjects(parseCSV(csvKendala));
     if (kRows.length) {
       KENDALA.splice(0, KENDALA.length, ...kRows.map(r => ({
-        type: (r.Type||'info').toLowerCase(), ico: r.Icon,
-        title: r.Judul, desc: r.Deskripsi, rtl: r.RTL,
+        // Supports both "clean" column names (Judul, Deskripsi, RTL) and
+        // original CAPS format: JENIS KENDALA→JENISKENDALA, RENCANA TINDAK LANJUT→RENCANATINDAKLANJUT
+        type: (r.Type || r.JENISKENDALA || 'info').toLowerCase(),
+        ico: r.Icon || '',
+        title: r.Judul || r.JENISKENDALA || r.RUANGAN || '',
+        desc: r.Deskripsi || r.Jamkejadian || '',
+        rtl: r.RTL || r.RENCANATINDAKLANJUT || '',
       })));
     }
 
@@ -2154,21 +2172,32 @@ async function loadFromSheets() {
     const mRows = csvToObjects(parseCSV(csvMeninggal));
     if (mRows.length) {
       MENINGGAL.splice(0, MENINGGAL.length, ...mRows.map(r => ({
-        nama: r.Nama, ruangan: r.Ruangan, diag: r.Diagnosa, jam: r.Jam, dpjp: r.DPJP,
+        // Supports NAMA PASIEN→NAMAPASIEN, RUANGAN, DIAGNOSA, JAM MENINGGAL→JAMMENINGGAL
+        nama: r.Nama || r.NAMAPASIEN || '',
+        ruangan: r.Ruangan || r.RUANGAN || '',
+        diag: r.Diagnosa || r.DIAGNOSA || '',
+        jam: r.Jam || r.JAMMENINGGAL || '',
+        dpjp: r.DPJP || '',
       })));
     }
     const rRows = csvToObjects(parseCSV(csvRujuk));
     if (rRows.length) {
       RUJUK.splice(0, RUJUK.length, ...rRows.map(r => ({
-        nama: r.Nama, diag: r.Diagnosa, rs: r.RS_Tujuan, alasan: r.Alasan,
+        // Supports NAMA PASIEN→NAMAPASIEN, DIAGNOSA, RUMAH SAKIT RUJUKAN→RUMAHSAKITRUJUKAN, ALASAN RUJUK→ALASANRUJUK
+        nama: r.Nama || r.NAMAPASIEN || '',
+        diag: r.Diagnosa || r.DIAGNOSA || '',
+        rs: r.RS_Tujuan || r.RUMAHSAKITRUJUKAN || '',
+        alasan: r.Alasan || r.ALASANRUJUK || '',
       })));
     }
 
     // ── BOR Trend chart ───────────────────────
+    // BOR values may be stored as decimal (0.94) or percentage (94); normalize to %
+    const normBOR = v => { const n = parseFloat(v)||0; return n > 0 && n <= 1 ? n * 100 : n; };
     const tRows = csvToObjects(parseCSV(csvTrend));
     if (tRows.length && window._borChart) {
       window._borChart.data.labels = tRows.map(r => r.Tanggal);
-      window._borChart.data.datasets[0].data = tRows.map(r => parseFloat(r.BOR)||0);
+      window._borChart.data.datasets[0].data = tRows.map(r => normBOR(r.BOR));
       window._borChart.data.datasets[1].data = tRows.map(r => parseFloat(r.JumlahPasienIGD)||0);
       window._borChart.update();
     }
@@ -2181,6 +2210,26 @@ async function loadFromSheets() {
         kosong: parseInt(r.TempatTidurKosong)||0,
         total: parseInt(r.Total)||0,
         filled: parseInt(r.Terisi)||(parseInt(r.Total)||0) - (parseInt(r.TempatTidurKosong)||0),
+      })));
+    }
+
+    // ── Rencana Operasi ───────────────────────
+    const opRows = csvToObjects(parseCSV(csvOperasi));
+    if (opRows.length) {
+      OPERASI.splice(0, OPERASI.length, ...opRows.map((r,i) => ({
+        no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
+        ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
+        jam: r.Jam_Rencana || '-', status: (r.Status||'').toLowerCase() === 'em' ? 'em' : 'ok',
+      })));
+    }
+
+    // ── Prediksi Pulang ───────────────────────
+    const plRows = csvToObjects(parseCSV(csvPulang));
+    if (plRows.length) {
+      PULANG.splice(0, PULANG.length, ...plRows.map((r,i) => ({
+        no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
+        ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
+        mrs: r.MRS_Tgl, los: r.LOS || 0,
       })));
     }
 
