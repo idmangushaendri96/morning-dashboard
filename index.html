@@ -1227,6 +1227,7 @@ td.sev-n { border-left: 3px solid transparent; }
                 <th>DPJP</th>
                 <th>Lab Terkini</th>
                 <th>Update Terapi</th>
+                <th>Follow Up</th>
               </tr>
             </thead>
             <tbody id="tbl-dmdhf"></tbody>
@@ -1518,6 +1519,7 @@ function renderPerhatian() {
         ${p.sev==='crit'?'<span class="tag critical">Kritis</span>':
           p.sev==='warn'?'<span class="tag pending">Waspada</span>':
           '<span class="tag stable">Stabil</span>'}
+        ${p.rujuk ? '<div style="margin-top:4px"><span class="tag info">Rencana Rujuk</span></div>' : ''}
       </td>
       <td><button class="xbtn" onclick="toggleSoap(this,'soap-${i}')">SOAP ▾</button></td>
     </tr>
@@ -1526,6 +1528,12 @@ function renderPerhatian() {
         <div class="soap-box">
           <div><span class="sk">SOAP</span> ${p.soap}</div>
           <div style="margin-top:6px"><span class="sk">Follow Up</span> ${p.fu}</div>
+          ${p.tglUpdate ? `<div class="ts" style="margin-top:6px">Update terakhir: ${p.tglUpdate}</div>` : ''}
+          ${p.history && p.history.length ? `
+          <div class="fu-timeline" style="margin-top:10px;border:1px solid var(--bdr);border-radius:8px;overflow:hidden">
+            <div class="fu-day-hdr"><span>Hari</span><span>Tgl</span><span>SOAP</span><span>Follow Up</span></div>
+            ${p.history.map(h => `<div class="fu-day"><div class="fu-hari">${h.hari}</div><div class="ts">${h.tgl}</div><div class="fu-note td">${h.a}</div><div class="fu-note td">${h.b}</div></div>`).join('')}
+          </div>` : ''}
           <div class="img-gallery">
             ${['EKG','Lab/Darah','Rontgen/CXR','Foto Klinis'].map(type => `
             <div class="img-slot">
@@ -1609,7 +1617,7 @@ function renderICU() {
 
 function renderDmDhf() {
   const tbody = document.getElementById('tbl-dmdhf');
-  tbody.innerHTML = DM_DHF.map(p => `
+  tbody.innerHTML = DM_DHF.map((p,i) => `
     <tr>
       <td class="tc ts">${p.no}</td>
       <td>
@@ -1621,6 +1629,26 @@ function renderDmDhf() {
       <td class="ts">${p.dpjp}</td>
       <td class="ts" style="min-width:200px">${p.lab}</td>
       <td class="td">${p.terapi}</td>
+      <td>
+        <button class="fu-btn" onclick="toggleFU(this,'dmfu-${i}')">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5h8M6 2l3 3-3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          ${(p.followup||[]).length} Hari
+        </button>
+      </td>
+    </tr>
+    <tr class="xrow" id="dmfu-${i}">
+      <td colspan="8" style="padding:0 0 0 12px;background:var(--surf2)">
+        <div class="fu-timeline">
+          <div class="fu-day-hdr"><span>Hari</span><span>Tgl</span><span>Lab / Pemeriksaan</span><span>Terapi / Follow Up</span></div>
+          ${(p.followup||[]).map(d => `
+          <div class="fu-day">
+            <div class="fu-hari">${d.hari}</div>
+            <div class="ts">${d.tgl}</div>
+            <div class="fu-vital ts">${d.vital}</div>
+            <div class="fu-note td">${d.catatan}</div>
+          </div>`).join('')}
+        </div>
+      </td>
     </tr>
   `).join('');
 }
@@ -2057,6 +2085,26 @@ function csvToObjects(rows) {
   });
 }
 
+
+// Ambil nilai kolom pertama yang cocok dengan salah satu regex nama-kolom (tahan perbedaan huruf/spasi)
+function pick(r, ...res) {
+  for (const re of res) { const k = Object.keys(r).find(k => re.test(k)); if (k && r[k]) return r[k]; }
+  return '';
+}
+const isYes = v => !!v && !/^(tidak|no|n|-|0|false)$/i.test(String(v).trim());
+// Gabungkan baris-baris milik pasien yang sama (kunci: nama + tgl MRS) → [[entri lama … entri terbaru], …]
+function groupPatients(entries, keyFn) {
+  const map = new Map();
+  entries.forEach(e => {
+    const k = keyFn(e).toUpperCase().replace(/\s+/g, ' ').trim();
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(e);
+  });
+  return [...map.values()].map(g =>
+    g.sort((a, b) => ((a.date ? a.date.getTime() : 0) - (b.date ? b.date.getTime() : 0)) || (a.i - b.i)));
+}
+const histRows = (arr, cols) => arr.map((e, n) => ({ hari: 'H' + (n + 1), tgl: e.tgl || '', a: cols[0](e) || '', b: cols[1](e) || '' }));
+
 // Hitung usia (tahun) dari tanggal lahir: dd/mm/yyyy, yyyy-mm-dd, atau angka langsung
 function calcAge(s) {
   s = (s || '').trim();
@@ -2122,7 +2170,7 @@ function updateCounts() {
     tiles[0].textContent = cnt('crit');
     tiles[1].textContent = cnt('warn');
     tiles[2].textContent = cnt('ok');
-    tiles[3].textContent = RUJUK.length;
+    tiles[3].textContent = PERHATIAN.filter(p => p.rujuk).length;
   }
   // Kotak statistik: ICU / NICU / PICU
   const unitN = u => ICU_DATA.filter(p => (p.unit || '').toUpperCase() === u).length;
@@ -2384,34 +2432,41 @@ async function loadFromSheets() {
     }
 
     // ── Pasien Perhatian ──────────────────────
-    const pRows = csvToObjects(parseCSV(csvPerhatian));
-    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
-      PERHATIAN.splice(0, PERHATIAN.length, ...pRows.map((r,i) => ({
-        no: r.No || r.NO || i+1,
-        nama: r.Nama || r.NAMAPASIEN || '',
-        usia: r.Usia || r.USIA || calcAge(r.TGLLAHIR),
-        eselon: r.Eselon || r.ESELON || '',
-        ruangan: r.Ruangan || r.RUANGAN || '',
-        diag: r.Diagnosa || r.DIAGNOSA || '',
-        dpjp: r.DPJP || '',
-        // Kolom opsional "SEVERITY" (isi: Kritis / Waspada / Stabil). Jika tidak ada → Stabil.
-        sev: parseSev(r.SEVERITY || r.Severity || r.STATUS || r.Status || r.KONDISI),
-        soap: r.SOAP || '',
-        fu: r.Follow_Up || r.FOLLOWUP || '',
-      })));
+    // 1 pasien = 1 baris di dashboard. Hari berikutnya: salin baris pasien di Google Sheets,
+    // ubah TANGGAL + SOAP + FOLLOW UP → baris lama otomatis jadi riwayat di bawah baris terbaru.
+    // Kolom opsional: STATUS (Kritis/Waspada/Stabil), RENCANA RUJUK (isi "Ya" bila direncanakan rujuk).
+    {
+      const entries = csvToObjects(parseCSV(csvPerhatian)).filter(r => pick(r, /NAMAPASIEN|^Nama/i)).map((r, i) => ({
+        i, tgl: pick(r, /^TANGGAL$/i), date: parseDateID(pick(r, /^TANGGAL$/i)),
+        nama: pick(r, /NAMAPASIEN|^Nama/i), mrs: pick(r, /^TANGGALMRS$/i),
+        usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
+        eselon: pick(r, /ESELON/i), ruangan: pick(r, /^RUANGAN$/i).trim(), diag: pick(r, /DIAGNOSA/i), dpjp: pick(r, /DPJP/i),
+        soap: pick(r, /^SOAP$/i), fu: pick(r, /FOLLOWUP/i),
+        sev: parseSev(pick(r, /^(SEVERITY|STATUS|STATUSPASIEN|KONDISI)$/i)),
+        rujuk: isYes(pick(r, /RENCANARUJUK/i)),
+      }));
+      PERHATIAN.splice(0, PERHATIAN.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
+        const L = g[g.length - 1];
+        return { no: n + 1, nama: L.nama, usia: L.usia, eselon: L.eselon, ruangan: L.ruangan, diag: L.diag, dpjp: L.dpjp,
+                 sev: L.sev, rujuk: L.rujuk, soap: L.soap, fu: L.fu, tglUpdate: L.tgl,
+                 history: histRows(g.slice(0, -1), [e => e.soap, e => e.fu]) };
+      }));
     }
 
     // ── ICU ───────────────────────────────────
-    const icuRows = csvToObjects(parseCSV(csvICU));
-    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
-      ICU_DATA.splice(0, ICU_DATA.length, ...icuRows.map((r,i) => {
-        const pNo = parseInt(r.No) || i+1;
-        return {
-          no: pNo, nama: r.Nama, eselon: r.Eselon, tgl: r.MRS_Tgl,
-          unit: r.Unit, diag: r.Diagnosa, dpjp: r.DPJP,
-          vital: r.Vital_Signs, catatan: r.Catatan,
-          followup: [],
-        };
+    // Kolom wajib: Nama, MRS_Tgl, Unit, Diagnosa, DPJP, Vital_Signs, Catatan. Tambah kolom "Tanggal"
+    // agar follow-up per hari: salin baris pasien, ubah Tanggal + Vital_Signs + Catatan.
+    {
+      const entries = csvToObjects(parseCSV(csvICU)).filter(r => pick(r, /^Nama/i)).map((r, i) => ({
+        i, tgl: pick(r, /^Tanggal$/i), date: parseDateID(pick(r, /^Tanggal$/i)),
+        nama: pick(r, /^Nama/i), mrs: pick(r, /^MRS_?Tgl$/i), eselon: pick(r, /^Eselon$/i), unit: pick(r, /^Unit$/i),
+        diag: pick(r, /^Diagnosa$/i), dpjp: pick(r, /^DPJP$/i), vital: pick(r, /^Vital/i), catatan: pick(r, /^Catatan$/i),
+      }));
+      ICU_DATA.splice(0, ICU_DATA.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
+        const L = g[g.length - 1];
+        return { no: n + 1, nama: L.nama, eselon: L.eselon, tgl: L.mrs, unit: L.unit, diag: L.diag, dpjp: L.dpjp,
+                 vital: L.vital, catatan: L.catatan,
+                 followup: g.map((e, k) => ({ hari: 'H' + (k + 1), tgl: e.tgl || '', vital: e.vital, catatan: e.catatan })) };
       }));
     }
 
@@ -2477,22 +2532,22 @@ async function loadFromSheets() {
     }
 
     // ── DM / DHF Khusus ───────────────────────
-    // Kolom sheet: NO, TANGGAL, NAMA PASIEN, Tgl lahir, ESELON, TANGGAL MRS, RUANGAN, DIAGNOSA, DPJP,
-    //   ANAMNESIS/PEMERIKSAAN FISIK, PEMERIKSAAN PENUNJANG, update TERAPI RUANGAN, FOLLOW UP
+    // Sama seperti Pasien Perhatian: 1 pasien = 1 baris; baris per hari jadi riwayat follow-up.
     {
-      const col = (r, ...res) => { for (const re of res) { const k = Object.keys(r).find(k => re.test(k)); if (k && r[k]) return r[k]; } return ''; };
-      const dmRows = csvToObjects(parseCSV(csvDM)).filter(r => col(r, /NAMAPASIEN|^Nama/i));
-      DM_DHF.splice(0, DM_DHF.length, ...dmRows.map((r,i) => ({
-        no: col(r, /^NO$/i) || i+1,
-        nama: col(r, /NAMAPASIEN|^Nama/i),
-        usia: col(r, /^Usia$/i) || calcAge(col(r, /lahir/i)),
-        eselon: col(r, /ESELON/i),
-        ruangan: col(r, /RUANGAN$/i).trim(),
-        diag: col(r, /DIAGNOSA/i),
-        dpjp: col(r, /DPJP/i),
-        lab: col(r, /PENUNJANG/i, /ANAMNESIS/i),
-        terapi: [col(r, /TERAPI/i), col(r, /FOLLOWUP/i)].filter(Boolean).join(' · '),
-      })));
+      const entries = csvToObjects(parseCSV(csvDM)).filter(r => pick(r, /NAMAPASIEN|^Nama/i)).map((r, i) => ({
+        i, tgl: pick(r, /^TANGGAL$/i), date: parseDateID(pick(r, /^TANGGAL$/i)),
+        nama: pick(r, /NAMAPASIEN|^Nama/i), mrs: pick(r, /^TANGGALMRS$/i),
+        usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
+        eselon: pick(r, /ESELON/i), ruangan: pick(r, /^RUANGAN$/i).trim(), diag: pick(r, /DIAGNOSA/i), dpjp: pick(r, /DPJP/i),
+        lab: pick(r, /PENUNJANG/i, /ANAMNESIS/i),
+        terapi: [pick(r, /TERAPI/i), pick(r, /FOLLOWUP/i)].filter(Boolean).join(' · '),
+      }));
+      DM_DHF.splice(0, DM_DHF.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
+        const L = g[g.length - 1];
+        return { no: n + 1, nama: L.nama, usia: L.usia, eselon: L.eselon, ruangan: L.ruangan, diag: L.diag, dpjp: L.dpjp,
+                 lab: L.lab, terapi: L.terapi,
+                 followup: g.map((e, k) => ({ hari: 'H' + (k + 1), tgl: e.tgl || '', vital: e.lab, catatan: e.terapi })) };
+      }));
     }
 
     // ── Rencana Operasi ───────────────────────
