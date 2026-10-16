@@ -1997,9 +1997,20 @@ const SHEETS_CONFIG = {
 };
 
 // Ambil CSV satu tab dari Google Sheets
+// gid tiap tab (dari URL ...#gid=XXXX). Endpoint /export mengembalikan sel MENTAH apa adanya
+// (baris catatan, spasi, header, data). Endpoint gviz TIDAK dipakai karena Google menebak-nebak
+// header & menggabungkan baris catatan/header sehingga parser selalu kosong.
+const SHEET_GIDS = {
+  KPI_Header: 617013744, Operasional: 1277220291, BOR_Trend: 1037632839,
+  Tempat_Tidur: 1686419825, Pasien_Perhatian: 81529030, ICU: 748491083,
+  Kendala: 115892003, Meninggal: 2010183210, Rujuk: 1687339277,
+  DM_DHF: 1405481287, Rencana_Operasi: 215698629, Prediksi_Pulang: 410523781,
+};
 async function fetchSheet(sheetName) {
-  const url = `${SHEETS_CONFIG.BASE_URL}${SHEETS_CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-  const res = await fetch(url);
+  const gid = SHEET_GIDS[sheetName];
+  if (gid === undefined) throw new Error(`gid untuk tab "${sheetName}" belum diatur`);
+  const url = `${SHEETS_CONFIG.BASE_URL}${SHEETS_CONFIG.SHEET_ID}/export?format=csv&gid=${gid}&_=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Fetch gagal: ${sheetName} (HTTP ${res.status})`);
   const text = await res.text();
   // Deteksi jika response adalah HTML (redirect login / akses ditolak)
@@ -2249,7 +2260,10 @@ async function loadFromSheets() {
     // ── Tempat Tidur ──────────────────────────
     const bedRows = csvToObjects(parseCSV(csvBeds));
     if (bedRows.length) {
-      BEDS.splice(0, BEDS.length, ...bedRows.map(r => ({
+      // Abaikan baris sisa/judul (mis. "Tempat Tidur yang kosong") & baris tanpa nama ruangan
+      BEDS.splice(0, BEDS.length, ...bedRows
+        .filter(r => (r.RuanganKelas || r.Nama_Ruangan || '').trim() && !/tempat\s*tidur/i.test(r.RuanganKelas || r.Nama_Ruangan))
+        .map(r => ({
         name: r.RuanganKelas || r.Nama_Ruangan || '',
         kosong: parseInt(r.TempatTidurKosong)||0,
         total: parseInt(r.Total)||0,
