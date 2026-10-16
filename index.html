@@ -463,6 +463,21 @@ nav { flex: 1; padding: 8px 0; overflow-y: auto; }
 
 .bt-stats b { color: var(--txt); font-size: 13px; font-weight: 700; }
 
+/* Ruangan → kelas */
+.bed-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: start; }
+.bed-room { background: var(--surf2); border: 1px solid var(--bdr); border-radius: 7px; padding: 9px 11px; }
+.bed-room.single { display: flex; justify-content: space-between; align-items: center; }
+.bed-room.single.full { border-color: var(--crit); }
+.br-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--bdr); }
+.br-name { font-size: 10px; font-weight: 800; color: var(--txt2); text-transform: uppercase; letter-spacing: .05em; }
+.br-chip { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; border: 1px solid currentColor; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.br-chip.full, .br-num.full { color: var(--crit); }
+.br-chip.warn, .br-num.warn { color: var(--warn); }
+.br-chip.ok,   .br-num.ok   { color: var(--green); }
+.br-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--txt2); padding: 2px 0; }
+.br-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+.br-num small { font-size: 9px; font-weight: 600; margin-left: 3px; opacity: .8; }
+
 /* ── TABLE ─────────────────────────────────────────────────── */
 .tbl-wrap { overflow-x: auto; }
 
@@ -1360,16 +1375,8 @@ let BOR_TREND = {
 };
 
 const BEDS = [
-  {name:'MUSI',      total:20, filled:20},
-  {name:'PANDAN',    total:15, filled:14},
-  {name:'PAGARDEWA', total:24, filled:20},
-  {name:'SOPA',      total:14, filled:12},
-  {name:'BENAKAT',   total:12, filled:10},
-  {name:'ICU',       total: 4, filled: 4},
-  {name:'NICU',      total: 4, filled: 3},
-  {name:'PICU',      total: 2, filled: 1},
-  {name:'FLAMBOYAN', total: 5, filled: 3},
-  {name:'DAHLIA',    total: 6, filled: 2},
+  {ruangan:'BENAKAT', kelas:'EXECUTIVE', kosong:1}, {ruangan:'BENAKAT', kelas:'VVIP', kosong:1}, {ruangan:'BENAKAT', kelas:'ISOLASI', kosong:2},
+  {ruangan:'ICU', kelas:'', kosong:0}, {ruangan:'NICU', kelas:'', kosong:0}, {ruangan:'PICU', kelas:'', kosong:0},
 ];
 
 const PERHATIAN = [
@@ -1744,22 +1751,28 @@ function renderLaporan() {
 
 function renderBeds() {
   const grid = document.getElementById('bed-grid');
-  grid.innerHTML = BEDS.map(b => {
-    if (b.total > 0) {
-      const pct = Math.round((b.filled/b.total)*100);
-      const cls = pct===100?'full':pct>=85?'high':pct>=60?'mid':'low';
-      return `<div class="bed-tile">
-        <div class="bt-name">${b.name}</div>
-        <div class="bt-bar-bg"><div class="bt-bar ${cls}" style="width:${pct}%"></div></div>
-        <div class="bt-stats"><span><b>${b.filled}</b>/${b.total}</span><span>${pct}%</span></div>
+  if (!BEDS.length) { grid.innerHTML = '<div style="color:var(--txt3);font-size:12px;padding:8px">Belum ada data tempat tidur.</div>'; return; }
+  const rooms = [];
+  BEDS.forEach(b => {
+    let r = rooms.find(x => x.name === b.ruangan);
+    if (!r) { r = { name: b.ruangan, items: [] }; rooms.push(r); }
+    r.items.push(b);
+  });
+  const lvl = k => k === 0 ? 'full' : k <= 2 ? 'warn' : 'ok';
+  grid.innerHTML = rooms.map(r => {
+    const total = r.items.reduce((a, b) => a + b.kosong, 0);
+    const single = r.items.length === 1 && !r.items[0].kelas;
+    if (single) {
+      return `<div class="bed-room single ${lvl(total)}">
+        <span class="br-name">${r.name}</span>
+        <span class="br-num ${lvl(total)}">${total}<small>${total === 0 ? 'penuh' : 'kosong'}</small></span>
       </div>`;
     }
-    const k = b.kosong||0;
-    const cls = k===0?'full':k<=2?'high':'low';
-    return `<div class="bed-tile">
-      <div class="bt-name">${b.name}</div>
-      <div class="bt-bar-bg"><div class="bt-bar ${cls}" style="width:${k===0?'100':k<=3?'60':'30'}%"></div></div>
-      <div class="bt-stats"><span><b>${k}</b> kosong</span></div>
+    return `<div class="bed-room">
+      <div class="br-head"><span class="br-name">${r.name}</span>
+        <span class="br-chip ${lvl(total)}">${total} kosong</span></div>
+      ${r.items.map(i => `<div class="br-row"><span>${i.kelas || '-'}</span>
+        <span class="br-num ${lvl(i.kosong)}">${i.kosong === 0 ? 'penuh' : i.kosong}</span></div>`).join('')}
     </div>`;
   }).join('');
 }
@@ -2178,7 +2191,8 @@ function updateCounts() {
   [['ICU'],['NICU'],['PICU']].forEach(([u], i) => {
     if (!it[i]) return;
     it[i].querySelector('.sm-val').textContent = unitN(u);
-    it[i].querySelector('.sm-sub').textContent = 'pasien aktif';
+    const bd = BEDS.find(b => b.ruangan === u);
+    it[i].querySelector('.sm-sub').textContent = 'pasien aktif' + (bd ? ` · ${bd.kosong} TT kosong` : '');
   });
   // Kotak statistik: Rencana Operasi
   const ot = document.querySelectorAll('#sec-operasi .stat-m');
@@ -2519,16 +2533,22 @@ async function loadFromSheets() {
 
     // ── Tempat Tidur ──────────────────────────
     const bedRows = csvToObjects(parseCSV(csvBeds));
-    { // tab kosong = daftar kosong (jangan tampilkan data contoh)
-      // Abaikan baris sisa/judul (mis. "Tempat Tidur yang kosong") & baris tanpa nama ruangan
-      BEDS.splice(0, BEDS.length, ...bedRows
-        .filter(r => (r.RuanganKelas || r.Nama_Ruangan || '').trim() && !/tempat\s*tidur/i.test(r.RuanganKelas || r.Nama_Ruangan))
-        .map(r => ({
-        name: r.RuanganKelas || r.Nama_Ruangan || '',
-        kosong: parseInt(r.TempatTidurKosong)||0,
-        total: parseInt(r.Total)||0,
-        filled: parseInt(r.Terisi)||(parseInt(r.Total)||0) - (parseInt(r.TempatTidurKosong)||0),
-      })));
+    { // kolom: Ruangan | Kelas | Tempat Tidur Kosong | Tanggal. Tab kosong = daftar kosong
+      let lastRoom = '';
+      const out = [];
+      bedRows.forEach(r => {
+        const room = (r.Ruangan || '').trim();
+        const kelas = (r.Kelas || '').trim();
+        const raw = (r.TempatTidurKosong ?? '').toString().trim();
+        if (room) lastRoom = room;
+        if (!room && !kelas && raw === '') return;           // baris kosong
+        if (/tempat\s*tidur/i.test(room)) return;            // sisa judul
+        if (!lastRoom) return;
+        out.push({ ruangan: lastRoom.toUpperCase(),
+                   kelas: (kelas === '-' ? '' : kelas).toUpperCase(),
+                   kosong: parseInt(raw) || 0 });
+      });
+      BEDS.splice(0, BEDS.length, ...out);
     }
 
     // ── DM / DHF Khusus ───────────────────────
