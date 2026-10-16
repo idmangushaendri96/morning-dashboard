@@ -404,12 +404,14 @@ nav { flex: 1; padding: 8px 0; overflow-y: auto; }
 .card-body { padding: 16px; }
 
 /* ── GRID LAYOUTS ──────────────────────────────────────────── */
-.g2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+.g2 { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(300px,1fr); gap: 14px; margin-bottom: 14px; }
 .g22 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .mb14 { margin-bottom: 14px; }
 
 /* ── CHART ─────────────────────────────────────────────────── */
-.chart-wrap { position: relative; height: 190px; }
+.chart-wrap { position: relative; height: 100%; min-height: 300px; }
+.chart-card { display: flex; flex-direction: column; }
+.chart-card .card-body { flex: 1; min-height: 0; padding: 14px 16px 12px; }
 
 /* ── BED GRID ──────────────────────────────────────────────── */
 .bed-grid {
@@ -1046,7 +1048,7 @@ td.sev-n { border-left: 3px solid transparent; }
 
       <!-- CHART + BED OCCUPANCY -->
       <div class="g2 mb14">
-        <div class="card">
+        <div class="card chart-card">
           <div class="card-hdr">
             <div class="card-title">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 11.5 L4 7 L7 9 L10 4 L13 6" stroke="var(--navy)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1741,6 +1743,13 @@ function renderChart() {
 
   const ctx = document.getElementById('bor-chart').getContext('2d');
 
+  // Skala dinamis: BOR dibatasi ≤100%, bawah mengikuti data; IGD ada ruang di atas batang tertinggi
+  const _b = (BOR_TREND.bor || []).filter(v => v != null && !isNaN(v));
+  const BOR_MIN = _b.length ? Math.max(0, Math.floor((Math.min(..._b) - 10) / 10) * 10) : 0;
+  const BOR_MAX = Math.max(100, _b.length ? Math.ceil(Math.max(..._b) / 10) * 10 : 100);
+  const _i = (BOR_TREND.igd || []).filter(v => v != null && !isNaN(v));
+  const IGD_MAX = _i.length ? Math.ceil(Math.max(..._i) * 1.25 / 10) * 10 : 50;
+
   if (window._borChart) window._borChart.destroy();
 
   window._borChart = new Chart(ctx, {
@@ -1755,11 +1764,14 @@ function renderChart() {
           borderColor: '#1B4F8B',
           backgroundColor: 'rgba(27,79,139,.12)',
           borderWidth: 2,
-          pointRadius: 3,
-          pointHoverRadius: 5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBorderColor: isDark ? '#0D1C33' : '#fff',
+          pointBorderWidth: 2,
           pointBackgroundColor: '#1B4F8B',
           fill: true,
-          tension: .35,
+          cubicInterpolationMode: 'monotone',
+          spanGaps: true,
         },
         {
           type: 'bar',
@@ -1769,7 +1781,9 @@ function renderChart() {
           backgroundColor: 'rgba(93,182,51,.5)',
           borderColor: 'rgba(93,182,51,.8)',
           borderWidth: 1,
-          borderRadius: 3,
+          borderRadius: 4,
+          maxBarThickness: 34,
+          order: 2,
         }
       ]
     },
@@ -1807,13 +1821,13 @@ function renderChart() {
         },
         y1: {
           position: 'left',
-          min: 60, max: 110,
+          min: BOR_MIN, max: BOR_MAX,
           grid: { color: gridC },
           ticks: { color: tickC, font: { size:9.5 }, callback: v => v+'%' }
         },
         y2: {
           position: 'right',
-          min: 0, max: 80,
+          min: 0, suggestedMax: IGD_MAX, beginAtZero: true,
           grid: { display: false },
           ticks: { color: tickC, font: { size:9.5 } }
         }
