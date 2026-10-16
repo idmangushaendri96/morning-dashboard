@@ -1075,61 +1075,13 @@ td.sev-n { border-left: 3px solid transparent; }
         </div>
       </div>
 
-      <!-- SECOND ROW: Pasien count + Quick alerts -->
-      <div class="g22">
-        <div class="card">
-          <div class="card-hdr">
-            <div class="card-title">📈 Statistik Tambahan</div>
-          </div>
-          <div class="card-body">
-            <div class="lab-row">
-              <span class="lab-k">SC hari ini</span><span class="lab-v"><b>3</b> tindakan</span>
-              <span class="lab-k">PN hari ini</span><span class="lab-v"><b>2</b> persalinan</span>
-              <span class="lab-k">Pasien baru</span><span class="lab-v"><b>23</b> masuk dari IGD</span>
-              <span class="lab-k">Cek-in IGD</span><span class="lab-v"><b>32</b> kunjungan</span>
-              <span class="lab-k">Op. elektif</span><span class="lab-v"><b>5</b> jadwal hari ini</span>
-              <span class="lab-k">Prediksi BLPL</span><span class="lab-v"><b>10</b> pasien hari ini</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-hdr">
-            <div class="card-title">🔔 Highlight Pagi Ini</div>
-          </div>
-          <div class="card-body" style="padding:12px;">
-            <div class="alert-list">
-              <div class="abox crit">
-                <div class="abox-ico">🔴</div>
-                <div class="abox-content">
-                  <div class="abox-title">6 pasien perlu perhatian khusus</div>
-                  <div class="abox-desc">Termasuk 1 STEMI aktif, 1 CVD dengan GCS ↓</div>
-                </div>
-              </div>
-              <div class="abox warn">
-                <div class="abox-ico">⚠️</div>
-                <div class="abox-content">
-                  <div class="abox-title">Ventilator ICU — lapor IPSRS</div>
-                  <div class="abox-desc">1 unit tidak berfungsi, perlu segera diperbaiki</div>
-                </div>
-              </div>
-              <div class="abox ok">
-                <div class="abox-ico">✅</div>
-                <div class="abox-content">
-                  <div class="abox-title">Stok Ceftriaxone sudah diorder</div>
-                  <div class="abox-desc">Estimasi tiba sore ini dari distributor</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
       <!-- LAPORAN OPERASIONAL TABLE -->
       <div class="card" style="margin-top:14px">
         <div class="card-hdr">
           <div class="card-title">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h10v10H2zM2 5h10M2 8h10M5 2v10" stroke="var(--navy)" stroke-width="1.4" stroke-linecap="round"/></svg>
-            Laporan Operasional — 14 Oktober 2026
+            <span>Laporan Operasional</span><span id="op-title-date"></span>
           </div>
           <span class="card-pill">12 Indikator</span>
         </div>
@@ -2308,6 +2260,7 @@ function applyDaily(daily) {
   };
   // Tanggal data terbaru → subjudul Ringkasan
   const txt = 'Data per ' + L.date.toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'});
+  const od = document.getElementById('op-title-date'); if (od) od.textContent = ' — ' + L.date.toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'});
   const ov = document.getElementById('sec-overview'); if (ov) ov.dataset.sub = txt;
   if (ov && ov.classList.contains('active')) { const sub = document.getElementById('sec-sub'); if (sub) sub.textContent = txt; }
 }
