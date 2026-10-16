@@ -2000,8 +2000,18 @@ const SHEETS_CONFIG = {
 async function fetchSheet(sheetName) {
   const url = `${SHEETS_CONFIG.BASE_URL}${SHEETS_CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Fetch gagal: ${sheetName} (${res.status})`);
-  return res.text();
+  if (!res.ok) throw new Error(`Fetch gagal: ${sheetName} (HTTP ${res.status})`);
+  const text = await res.text();
+  // Deteksi jika response adalah HTML (redirect login / akses ditolak)
+  // Ini terjadi jika Google Sheets BELUM dishare ke "Anyone with the link"
+  if (text.trim().startsWith('<')) {
+    throw new Error(
+      `Sheet "${sheetName}" tidak bisa diakses.\n` +
+      `Pastikan Google Sheets sudah dishare:\n` +
+      `Klik "Share" → "Change to anyone with the link" → pilih "Viewer" → klik Done.`
+    );
+  }
+  return text;
 }
 
 // Parser CSV sederhana (handle quoted fields dengan koma & newline)
@@ -2103,22 +2113,56 @@ async function loadFromSheets() {
     }
 
     // ── KPI Header cards ─────────────────────
+    // Kolom sheet (setelah sanitize): Tanggal, BOR, JumlahPasien, AVLOS,
+    //   PasienIGD, RJ, MCU, HD, Partus, SC, PN, KamarBedah, Penunjang
     const kpi = csvToObjects(parseCSV(csvKPI));
     if (kpi.length) {
       const k = kpi[kpi.length - 1];
-      const setKPI = (sel, val) => { const el=document.querySelector(sel); if(el) el.textContent=val; };
-      // BOR card — normalize decimal (0.94) or percentage (94) to display as e.g. "94"
-      const borRaw = parseFloat((k.BOR||'').replace('%',''))||0;
-      const borDisplay = borRaw > 0 && borRaw <= 1 ? (borRaw * 100).toFixed(1) : borRaw.toFixed(1);
-      document.querySelectorAll('.kpi-card')[0]?.querySelector('.kpi-val')?.childNodes[0] &&
-        (document.querySelectorAll('.kpi-card')[0].querySelector('.kpi-val').firstChild.textContent = borDisplay);
-      // Update delta texts dynamically
       const cards = document.querySelectorAll('.kpi-card');
-      if (cards[2]) cards[2].querySelector('.kpi-val').innerHTML = `${k.AVLOS}<span class="kpi-unit">hr</span>`;
-      if (cards[2]) cards[2].querySelector('.kpi-delta').textContent = k.AVLOS_Delta || '';
-      if (cards[3]) cards[3].querySelector('.kpi-delta').textContent = k.IGD_Delta || '';
-      if (cards[4]) cards[4].querySelector('.kpi-delta').textContent = k.RJ_Delta || '';
-      // Update subtitle date
+
+      // cards[0] = BOR — normalize: 0.74 → 74.0, atau 84 → 84.0
+      const borRaw = parseFloat((k.BOR||'').replace('%',''))||0;
+      if (borRaw > 0) {
+        const borDisplay = borRaw <= 1 ? (borRaw * 100).toFixed(1) : borRaw.toFixed(1);
+        if (cards[0]?.querySelector('.kpi-val')?.firstChild)
+          cards[0].querySelector('.kpi-val').firstChild.textContent = borDisplay;
+      }
+
+      // cards[1] = Jumlah Pasien (kolom "Jumlah Pasien" → key "JumlahPasien")
+      // Guard: nilai < 2 kemungkinan data entry error (misal 0.74 bukan 74)
+      const jpVal = parseInt(k.JumlahPasien)||0;
+      if (jpVal >= 2 && cards[1]?.querySelector('.kpi-val'))
+        cards[1].querySelector('.kpi-val').textContent = jpVal;
+
+      // cards[2] = AVLOS — gunakan ||'-' agar tidak tampil "undefined"
+      if (cards[2]) {
+        const avlosVal = k.AVLOS || '-';
+        cards[2].querySelector('.kpi-val').innerHTML = `${avlosVal}<span class="kpi-unit">hr</span>`;
+        cards[2].querySelector('.kpi-delta').textContent = k.AVLOS_Delta || '';
+      }
+
+      // cards[3] = Kunjungan IGD (kolom "Pasien IGD" → key "PasienIGD")
+      const igdVal = parseInt(k.PasienIGD)||0;
+      if (cards[3]) {
+        if (igdVal > 0 && cards[3].querySelector('.kpi-val'))
+          cards[3].querySelector('.kpi-val').textContent = igdVal;
+        cards[3].querySelector('.kpi-delta').textContent = k.IGD_Delta || '';
+      }
+
+      // cards[4] = Rawat Jalan (kolom "RJ")
+      const rjVal = parseInt(k.RJ)||0;
+      if (cards[4]) {
+        if (rjVal > 0 && cards[4].querySelector('.kpi-val'))
+          cards[4].querySelector('.kpi-val').textContent = rjVal;
+        cards[4].querySelector('.kpi-delta').textContent = k.RJ_Delta || '';
+      }
+
+      // cards[5] = HD / MCU (kolom "HD" + "MCU")
+      const mcuhdVal = (parseInt(k.MCU)||0) + (parseInt(k.HD)||0);
+      if (mcuhdVal > 0 && cards[5]?.querySelector('.kpi-val'))
+        cards[5].querySelector('.kpi-val').textContent = mcuhdVal;
+
+      // Update subtitle tanggal di bawah judul
       const sub = document.getElementById('sec-sub');
       if (sub && k.Tanggal) sub.textContent = `Data per ${k.Tanggal} · ${k.Jam_Update || ''} WIB`;
     }
@@ -2238,7 +2282,12 @@ async function loadFromSheets() {
 
   } catch(err) {
     console.error('Sheets load error:', err);
-    showBanner(`⚠️ Gagal terhubung ke Google Sheets — menampilkan data lokal. (${err.message})`, 'warn');
+    // Jika error karena akses ditolak, tampilkan instruksi langsung di banner
+    const isAccessError = err.message && err.message.includes('tidak bisa diakses');
+    const msg = isAccessError
+      ? `🔒 ${err.message}`
+      : `⚠️ Gagal terhubung ke Google Sheets (${err.message}) — menampilkan data contoh.`;
+    showBanner(msg, isAccessError ? 'warn' : 'warn');
     renderAll();
   }
 }
