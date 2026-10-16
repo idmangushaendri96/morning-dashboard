@@ -2229,19 +2229,20 @@ function applyDaily(daily) {
   // Pembanding: "kemarin" hanya jika baris sebelumnya memang H-1; selain itu tulis tanggalnya
   const gap = P ? Math.round((L.date - P.date) / 86400000) : 0;
   const ref = !P ? '' : gap === 1 ? 'kemarin' : String(P.date.getDate()).padStart(2,'0') + '/' + String(P.date.getMonth()+1).padStart(2,'0');
-  const setCard = (i, html, cur, prev, dec, unit) => {
+  const setCard = (i, html, cur, prev, dec, unit, lowerBetter) => {
     const c = cards[i]; if (!c) return;
     c.querySelector('.kpi-val').innerHTML = html;
     const d = c.querySelector('.kpi-delta');
     if (cur == null || prev == null) { d.className = 'kpi-delta eq'; d.textContent = ''; return; }
     const diff = +(cur - prev).toFixed(dec);
-    d.className = 'kpi-delta ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : 'eq');
+    const good = lowerBetter ? diff < 0 : diff > 0, bad = lowerBetter ? diff > 0 : diff < 0;   // AVLOS: turun = hijau, naik = merah
+    d.className = 'kpi-delta ' + (good ? 'up' : bad ? 'down' : 'eq');
     d.textContent = diff === 0 ? `= sama vs ${ref}` : `${diff > 0 ? '▲' : '▼'} ${fmtN(Math.abs(diff), dec)}${unit||''} vs ${ref}`;
   };
   const p = P || {};
   setCard(0, `${fmtN(L.bor,1)}<span class="kpi-unit">%</span>`, L.bor, p.bor, 1, '%');
   setCard(1, fmtN(L.pasien), L.pasien, p.pasien, 0, '');
-  setCard(2, `${fmtN(L.avlos,1)}<span class="kpi-unit">hr</span>`, L.avlos, p.avlos, 1, '');
+  setCard(2, `${fmtN(L.avlos,1)}<span class="kpi-unit">hr</span>`, L.avlos, p.avlos, 1, '', true);
   setCard(3, fmtN(L.igd), L.igd, p.igd, 0, '');
   setCard(4, fmtN(L.rj), L.rj, p.rj, 0, '');
   setCard(5, `${fmtN(L.hd)} / ${fmtN(L.mcu)}`, L.hd, p.hd, 0, '');
