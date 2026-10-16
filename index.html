@@ -1509,7 +1509,7 @@ function renderPerhatian() {
       <td class="${sevClass(p.sev)} tc ts">${p.no}</td>
       <td>
         <div class="tn">${p.nama}</div>
-        <div class="ts">${p.usia} thn · ${eselonBadge(p.eselon)}</div>
+        <div class="ts">${p.usia ? p.usia + ' thn · ' : ''}${eselonBadge(p.eselon)}</div>
       </td>
       <td><span class="badge b-spec">${p.ruangan}</span></td>
       <td class="td" style="max-width:200px">${p.diag}</td>
@@ -2057,6 +2057,96 @@ function csvToObjects(rows) {
   });
 }
 
+// Hitung usia (tahun) dari tanggal lahir: dd/mm/yyyy, yyyy-mm-dd, atau angka langsung
+function calcAge(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (/^\d{1,3}$/.test(s)) return s;
+  let y, m, d, mt;
+  if ((mt = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) { y=+mt[1]; m=+mt[2]; d=+mt[3]; }
+  else if ((mt = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/))) { d=+mt[1]; m=+mt[2]; y=+mt[3]; }
+  else return '';
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if (now.getMonth()+1 < m || (now.getMonth()+1 === m && now.getDate() < d)) age--;
+  return age >= 0 && age < 130 ? String(age) : '';
+}
+// Normalisasi status pasien → 'crit' | 'warn' | 'ok'
+function parseSev(v) {
+  v = (v || '').toLowerCase();
+  if (/krit|crit|merah/.test(v)) return 'crit';
+  if (/wasp|warn|kuning/.test(v)) return 'warn';
+  return 'ok';
+}
+
+// Perbarui SEMUA angka ringkasan (badge sidebar, judul seksi, kotak statistik) dari data aktual
+function updateCounts() {
+  // Tanggal di sidebar = hari ini (WIB), bukan teks statis
+  try {
+    const d = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Jakarta' });
+    const sb = document.getElementById('sb-date'); if (sb) sb.textContent = d;
+  } catch(e) {}
+  const set =(sel, txt) => { const el = document.querySelector(sel); if (el) el.textContent = txt; };
+  const n = {
+    perhatian: PERHATIAN.length, icu: ICU_DATA.length, dmdhf: DM_DHF.length,
+    operasi: OPERASI.length, pulang: PULANG.length, kendala: KENDALA.length,
+  };
+  // Badge sidebar
+  Object.keys(n).forEach(k => set(`.ni[data-sec="${k}"] .ni-badge`, n[k]));
+  // Judul/subjudul seksi (dipakai header atas) + pill jumlah
+  const subs = {
+    perhatian: `${n.perhatian} pasien membutuhkan tindak lanjut`,
+    icu:       `${n.icu} pasien rawat intensif aktif`,
+    dmdhf:     `${n.dmdhf} pasien monitoring laboratorium`,
+    operasi:   `${n.operasi} tindakan terjadwal`,
+    pulang:    `${n.pulang} pasien diprediksi BLPL hari ini`,
+    kendala:   `${n.kendala} kendala tercatat`,
+  };
+  Object.keys(subs).forEach(k => {
+    const sec = document.getElementById('sec-' + k);
+    if (sec) sec.dataset.sub = subs[k];
+  });
+  const active = document.querySelector('.sec.active');
+  if (active && subs[active.id.replace('sec-','')]) set('#sec-sub', subs[active.id.replace('sec-','')]);
+  set('#sec-perhatian .count-pill', `${n.perhatian} Pasien`);
+  set('#sec-icu .count-pill',       `${n.icu} Pasien`);
+  set('#sec-dmdhf .count-pill',     `${n.dmdhf} Pasien`);
+  set('#sec-operasi .count-pill',   `${n.operasi} Tindakan`);
+  set('#sec-pulang .count-pill',    `${n.pulang} Pasien`);
+  set('#sec-kendala .count-pill',   `${n.kendala} Kendala`);
+
+  // Kotak statistik: Pasien Perlu Perhatian
+  const cnt = s => PERHATIAN.filter(p => p.sev === s).length;
+  const tiles = document.querySelectorAll('#sec-perhatian .stat-m .sm-val');
+  if (tiles.length >= 4) {
+    tiles[0].textContent = cnt('crit');
+    tiles[1].textContent = cnt('warn');
+    tiles[2].textContent = cnt('ok');
+    tiles[3].textContent = RUJUK.length;
+  }
+  // Kotak statistik: ICU / NICU / PICU
+  const unitN = u => ICU_DATA.filter(p => (p.unit || '').toUpperCase() === u).length;
+  const it = document.querySelectorAll('#sec-icu .stat-m');
+  [['ICU'],['NICU'],['PICU']].forEach(([u], i) => {
+    if (!it[i]) return;
+    it[i].querySelector('.sm-val').textContent = unitN(u);
+    it[i].querySelector('.sm-sub').textContent = 'pasien aktif';
+  });
+  // Kotak statistik: Rencana Operasi
+  const ot = document.querySelectorAll('#sec-operasi .stat-m');
+  const em = OPERASI.filter(p => p.status === 'em').length;
+  if (ot.length >= 3) {
+    ot[0].querySelector('.sm-val').textContent = n.operasi - em;
+    ot[1].querySelector('.sm-val').textContent = em;
+    ot[1].querySelector('.sm-sub').textContent = 'tindakan darurat';
+    ot[2].querySelector('.sm-val').textContent = n.operasi;
+  }
+  // Pill Meninggal & Rujuk
+  const pills = document.querySelectorAll('#sec-laporan .card-pill');
+  if (pills[0]) pills[0].textContent = `${MENINGGAL.length} Pasien`;
+  if (pills[1]) pills[1].textContent = `${RUJUK.length} Pasien`;
+}
+
 // ── STATUS BANNER ──────────────────────────────────────────
 function showBanner(msg, type='info') {
   let b = document.getElementById('sheets-banner');
@@ -2175,7 +2265,12 @@ async function loadFromSheets() {
 
       // Update subtitle tanggal di bawah judul
       const sub = document.getElementById('sec-sub');
-      if (sub && k.Tanggal) sub.textContent = `Data per ${k.Tanggal} · ${k.Jam_Update || ''} WIB`;
+      if (k.Tanggal) {
+        const txt = `Data per ${k.Tanggal}${k.Jam_Update ? ' · ' + k.Jam_Update + ' WIB' : ''}`;
+        const ov = document.getElementById('sec-overview');
+        if (ov) ov.dataset.sub = txt;
+        if (sub && document.getElementById('sec-overview')?.classList.contains('active')) sub.textContent = txt;
+      }
     }
 
     // ── Pasien Perhatian ──────────────────────
@@ -2184,12 +2279,13 @@ async function loadFromSheets() {
       PERHATIAN.splice(0, PERHATIAN.length, ...pRows.map((r,i) => ({
         no: r.No || r.NO || i+1,
         nama: r.Nama || r.NAMAPASIEN || '',
-        usia: r.Usia || '',
+        usia: r.Usia || r.USIA || calcAge(r.TGLLAHIR),
         eselon: r.Eselon || r.ESELON || '',
         ruangan: r.Ruangan || r.RUANGAN || '',
         diag: r.Diagnosa || r.DIAGNOSA || '',
         dpjp: r.DPJP || '',
-        sev: (r.Severity||'ok').toLowerCase(),
+        // Kolom opsional "SEVERITY" (isi: Kritis / Waspada / Stabil). Jika tidak ada → Stabil.
+        sev: parseSev(r.SEVERITY || r.Severity || r.STATUS || r.Status || r.KONDISI),
         soap: r.SOAP || '',
         fu: r.Follow_Up || r.FOLLOWUP || '',
       })));
@@ -2317,6 +2413,7 @@ function renderAll() {
   renderLaporan();
   renderBeds();
   renderChart();
+  updateCounts();
 }
 
 // Muat data (dari Sheets jika aktif, fallback ke dummy)
