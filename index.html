@@ -806,6 +806,20 @@ td.sev-n { border-left: 3px solid transparent; }
 }
 
 .img-slot input[type="file"] { display: none; }
+.img-slot { align-items: flex-start; max-width: 100%; }
+.img-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.img-row .img-thumb { width: 72px; height: 56px; }
+.img-row .img-thumb.has { border-style: solid; }
+.img-row .img-thumb.add { flex-direction: column; }
+.img-cnt { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.6); color: #fff; font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 8px; }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.15); border: none; color: #fff; font-size: 30px; width: 44px; height: 64px; border-radius: 10px; cursor: pointer; }
+.lb-nav:hover { background: rgba(255,255,255,.28); }
+.lb-prev { left: 20px; } .lb-next { right: 20px; }
+.lb-actions { display: flex; gap: 10px; }
+.lb-btn { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; padding: 7px 16px; font: 600 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.lb-btn:hover { background: rgba(255,255,255,.28); }
+.lb-del { border-color: rgba(255,120,120,.6); color: #ffb3b3; }
+.lb-del.confirm { background: #c0392b; color: #fff; border-color: #c0392b; }
 
 /* ── LIGHTBOX ──────────────────────────────────────────────── */
 .lightbox {
@@ -927,9 +941,15 @@ td.sev-n { border-left: 3px solid transparent; }
 
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
-  <button class="lb-close" onclick="document.getElementById('lightbox').classList.remove('open')">✕</button>
+  <button class="lb-close" onclick="lbClose()">✕</button>
+  <button class="lb-nav lb-prev" onclick="lbStep(-1)" aria-label="Sebelumnya">‹</button>
+  <button class="lb-nav lb-next" onclick="lbStep(1)" aria-label="Berikutnya">›</button>
   <img id="lb-img" src="" alt="">
   <div class="lb-label" id="lb-label"></div>
+  <div class="lb-actions">
+    <label class="lb-btn">Ganti foto<input type="file" accept="image/*" id="lb-replace" onchange="lbReplace(this)" hidden></label>
+    <button class="lb-btn lb-del" id="lb-del" onclick="lbDelete()">Hapus</button>
+  </div>
 </div>
 
 <!-- SIDEBAR -->
@@ -1494,22 +1514,7 @@ function renderPerhatian() {
             <div class="fu-day-hdr"><span>Hari</span><span>Tgl</span><span>SOAP</span><span>Follow Up</span></div>
             ${p.history.map(h => `<div class="fu-day"><div class="fu-hari">${h.hari}</div><div class="ts">${h.tgl}</div><div class="fu-note td">${h.a}</div><div class="fu-note td">${h.b}</div></div>`).join('')}
           </div>` : ''}
-          <div class="img-gallery">
-            ${['EKG','Lab/Darah','Rontgen/CXR','Foto Klinis'].map(type => `
-            <div class="img-slot">
-              <div class="img-slot-lbl">${type}</div>
-              <label>
-                <div class="img-thumb" id="pt-thumb-${i}-${type}" onclick="thumbClick(event,'pt-thumb-${i}-${type}','pt-file-${i}-${type}')">
-                  <div class="img-thumb-empty">
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 13.5V15h12v-1.5M9 3v9M9 3L6 6M9 3l3 3" stroke="var(--txt3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span>Upload</span>
-                  </div>
-                  <div class="img-upload-hint">Ganti Foto</div>
-                </div>
-                <input type="file" accept="image/*" id="pt-file-${i}-${type}" onchange="handleImgUpload(this,'pt-thumb-${i}-${type}')">
-              </label>
-            </div>`).join('')}
-          </div>
+          <div class="img-gallery">${gallerySlots('pt', p, ['EKG','Lab/Darah','Rontgen/CXR','Foto Klinis'])}          </div>
         </div>
       </td>
     </tr>
@@ -1554,22 +1559,7 @@ function renderICU() {
             <div class="fu-note td">${d.catatan}</div>
           </div>`).join('')}
         </div>
-        <div class="img-gallery" style="padding:10px 14px 12px">
-          ${['EKG','Lab/Darah','Rontgen','Foto Klinis'].map(type => `
-          <div class="img-slot">
-            <div class="img-slot-lbl">${type}</div>
-            <label>
-              <div class="img-thumb" id="icu-thumb-${i}-${type}" onclick="thumbClick(event,'icu-thumb-${i}-${type}','icu-file-${i}-${type}')">
-                <div class="img-thumb-empty">
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 13.5V15h12v-1.5M9 3v9M9 3L6 6M9 3l3 3" stroke="var(--txt3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>Upload</span>
-                </div>
-                <div class="img-upload-hint">Ganti Foto</div>
-              </div>
-              <input type="file" accept="image/*" id="icu-file-${i}-${type}" onchange="handleImgUpload(this,'icu-thumb-${i}-${type}')">
-            </label>
-          </div>`).join('')}
-        </div>
+        <div class="img-gallery" style="padding:10px 14px 12px">${gallerySlots('icu', p, ['EKG','Lab/Darah','Rontgen','Foto Klinis'])}        </div>
       </td>
     </tr>
   `).join('');
@@ -1661,21 +1651,7 @@ function renderKendala() {
         <div class="abox-title">${k.title}</div>
         <div class="abox-desc">${k.desc}</div>
         <div class="abox-rtl">📋 RTL: <span>${k.rtl}</span></div>
-        <div class="img-gallery" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.08)">
-          <div class="img-slot">
-            <div class="img-slot-lbl">Foto Kendala</div>
-            <label>
-              <div class="img-thumb" id="kend-thumb-${i}" onclick="thumbClick(event,'kend-thumb-${i}','kend-file-${i}')">
-                <div class="img-thumb-empty">
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 13.5V15h12v-1.5M9 3v9M9 3L6 6M9 3l3 3" stroke="var(--txt3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>Upload</span>
-                </div>
-                <div class="img-upload-hint">Ganti Foto</div>
-              </div>
-              <input type="file" accept="image/*" id="kend-file-${i}" onchange="handleImgUpload(this,'kend-thumb-${i}')">
-            </label>
-          </div>
-        </div>
+        <div class="img-gallery" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.08)">${gallerySlots('kend', {nama:k.title}, ['Foto Kendala'])}        </div>
       </div>
     </div>
   `).join('');
@@ -1838,34 +1814,135 @@ function renderChart() {
 
 // ── IMAGE UPLOAD & LIGHTBOX ─────────────────────────────────
 
-function thumbClick(e, thumbId, fileId) {
-  const thumb = document.getElementById(thumbId);
-  const hasImg = thumb.querySelector('img');
-  if (hasImg) {
-    // open lightbox
-    e.preventDefault();
-    e.stopPropagation();
-    document.getElementById('lb-img').src = hasImg.src;
-    document.getElementById('lb-label').textContent = thumbId.split('-').slice(-1)[0];
-    document.getElementById('lightbox').classList.add('open');
+// Foto pasien: banyak foto per kategori, disimpan di IndexedDB browser ini (tahan refresh & auto-refresh).
+// Catatan: tersimpan per browser/komputer, tidak dibagikan antar perangkat.
+const IMGS = {};                       // slotKey -> [{id, data}]
+let imgDbP = null;
+function imgDb() {
+  if (imgDbP) return imgDbP;
+  imgDbP = new Promise((res, rej) => {
+    try {
+      const q = indexedDB.open('mm-images', 1);
+      q.onupgradeneeded = () => q.result.createObjectStore('imgs', { keyPath: 'id' });
+      q.onsuccess = () => res(q.result);
+      q.onerror = () => rej(q.error);
+    } catch (e) { rej(e); }
+  });
+  return imgDbP;
+}
+async function imgTx(mode, fn) {
+  const db = await imgDb();
+  return new Promise((res, rej) => {
+    const t = db.transaction('imgs', mode); const rq = fn(t.objectStore('imgs'));
+    t.oncomplete = () => res(rq ? rq.result : undefined); t.onerror = () => rej(t.error);
+  });
+}
+const imgSave = rec => imgTx('readwrite', st => st.put(rec)).catch(() => {});
+const imgDel  = id  => imgTx('readwrite', st => st.delete(id)).catch(() => {});
+const imgsReady = (async () => {
+  try {
+    const all = await imgTx('readonly', st => st.getAll());
+    const old = Date.now() - 30 * 86400000;                    // buang foto > 30 hari
+    all.sort((a, b) => a.t - b.t).forEach(r => {
+      if (r.t < old) { imgDel(r.id); return; }
+      (IMGS[r.slot] = IMGS[r.slot] || []).push({ id: r.id, data: r.data });
+    });
+  } catch (e) { /* IndexedDB tidak tersedia: foto hanya bertahan selama halaman terbuka */ }
+  hydrateGallery();
+})();
+
+function gallerySlots(scope, p, types) {
+  const base = scope + '|' + (p.nama || '') + '|' + (p.mrs || p.tgl || '');
+  return types.map(type => `
+    <div class="img-slot" data-slot="${encodeURIComponent(base + '|' + type)}">
+      <div class="img-slot-lbl">${type}</div>
+      <div class="img-row"></div>
+    </div>`).join('');
+}
+const slotOf = el => decodeURIComponent(el.closest('.img-slot').dataset.slot);
+function paintSlot(el) {
+  const list = IMGS[decodeURIComponent(el.dataset.slot)] || [];
+  const addIcon = '<svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="var(--txt3)" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  el.querySelector('.img-row').innerHTML =
+    list.map((im, n) => `<div class="img-thumb has" onclick="lbOpen(this, ${n})"><img src="${im.data}" alt=""></div>`).join('') +
+    `<label class="img-thumb add" title="Tambah foto (bisa pilih banyak)"><div class="img-thumb-empty">${addIcon}<span>${list.length ? 'Tambah' : 'Upload'}</span></div>` +
+    `<input type="file" accept="image/*" multiple onchange="addImgs(this)"></label>`;
+}
+function hydrateGallery() { document.querySelectorAll('.img-slot[data-slot]').forEach(paintSlot); }
+
+// Kecilkan foto (maks 1280px, JPEG) supaya hemat penyimpanan
+function shrinkImg(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = rej;
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = rej;
+      im.onload = () => {
+        const k = Math.min(1, 1280 / Math.max(im.width, im.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/jpeg', 0.82));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function addImgs(input) {
+  const slotEl = input.closest('.img-slot'), slot = slotOf(input);
+  const files = [...input.files]; input.value = '';
+  for (const f of files) {
+    try {
+      const data = await shrinkImg(f);
+      const rec = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), slot, data, t: Date.now() };
+      (IMGS[slot] = IMGS[slot] || []).push({ id: rec.id, data });
+      imgSave(rec);
+    } catch (e) { showBanner('⚠️ Gagal membaca salah satu foto', 'warn'); }
   }
-  // else: let label trigger file input naturally
+  paintSlot(slotEl);
 }
 
-function handleImgUpload(input, thumbId) {
-  if (!input.files || !input.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const thumb = document.getElementById(thumbId);
-    thumb.innerHTML = `<img src="${e.target.result}" alt=""><div class="img-upload-hint">Ganti Foto</div>`;
-  };
-  reader.readAsDataURL(input.files[0]);
+// Lightbox: navigasi, ganti, hapus
+const LB = { slot: '', idx: 0, label: '' };
+function lbOpen(el, n) {
+  LB.slot = slotOf(el); LB.idx = n; LB.label = LB.slot.split('|').pop();
+  document.getElementById('lightbox').classList.add('open'); lbShow();
 }
+function lbShow() {
+  const list = IMGS[LB.slot] || [];
+  if (!list.length) { lbClose(); return; }
+  LB.idx = (LB.idx + list.length) % list.length;
+  document.getElementById('lb-img').src = list[LB.idx].data;
+  document.getElementById('lb-label').textContent = `${LB.label} · ${LB.idx + 1} / ${list.length}`;
+  document.querySelectorAll('.lb-nav').forEach(b => b.style.display = list.length > 1 ? '' : 'none');
+  const d = document.getElementById('lb-del'); d.textContent = 'Hapus'; d.classList.remove('confirm');
+}
+function lbStep(d) { LB.idx += d; lbShow(); }
+function lbClose() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.querySelectorAll('.img-slot[data-slot]').forEach(el => { if (decodeURIComponent(el.dataset.slot) === LB.slot) paintSlot(el); });
+}
+async function lbReplace(input) {
+  const f = input.files[0]; input.value = ''; if (!f) return;
+  try {
+    const data = await shrinkImg(f), im = IMGS[LB.slot][LB.idx];
+    im.data = data; imgSave({ id: im.id, slot: LB.slot, data, t: Date.now() }); lbShow();
+  } catch (e) { showBanner('⚠️ Gagal membaca foto pengganti', 'warn'); }
+}
+function lbDelete() {
+  const d = document.getElementById('lb-del');
+  if (!d.classList.contains('confirm')) { d.textContent = 'Yakin hapus?'; d.classList.add('confirm'); return; }
+  const [im] = IMGS[LB.slot].splice(LB.idx, 1); imgDel(im.id); lbShow();
+}
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (e.key === 'Escape') lbClose(); else if (e.key === 'ArrowLeft') lbStep(-1); else if (e.key === 'ArrowRight') lbStep(1);
+});
 
 function closeLightbox(e) {
-  if (e.target === document.getElementById('lightbox')) {
-    document.getElementById('lightbox').classList.remove('open');
-  }
+  if (e.target === document.getElementById('lightbox')) lbClose();
 }
 
 // ── ICU FOLLOW-UP TOGGLE ────────────────────────────────────
@@ -2583,6 +2660,7 @@ function renderAll() {
   renderBeds();
   renderChart();
   updateCounts();
+  hydrateGallery();
 }
 
 // Muat data (dari Sheets jika aktif, fallback ke dummy)
