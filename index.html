@@ -1205,6 +1205,13 @@ td.sev-n { border-left: 3px solid transparent; }
         <span class="count-pill b">4 Pasien</span>
       </div>
 
+      <div class="stat-row">
+        <div class="stat-m"><div class="sm-lbl">EWS Tinggi</div><div class="sm-val r">0</div><div class="sm-sub">skor ≥ 7 · respons emergensi</div></div>
+        <div class="stat-m"><div class="sm-lbl">EWS Sedang</div><div class="sm-val o">0</div><div class="sm-sub">skor 5–6 · review urgen</div></div>
+        <div class="stat-m"><div class="sm-lbl">EWS Rendah</div><div class="sm-val g">0</div><div class="sm-sub">skor 0–4 · observasi rutin</div></div>
+        <div class="stat-m"><div class="sm-lbl">Rencana Rujuk</div><div class="sm-val b">0</div><div class="sm-sub">sisrute proses</div></div>
+      </div>
+
       <div class="card">
         <div class="tbl-wrap">
           <table>
@@ -1216,8 +1223,8 @@ td.sev-n { border-left: 3px solid transparent; }
                 <th>Diagnosa</th>
                 <th>DPJP</th>
                 <th>Lab Terkini</th>
-                <th>Update Terapi</th>
-                <th>Follow Up</th>
+                <th>Status</th>
+                <th>Detail</th>
               </tr>
             </thead>
             <tbody id="tbl-dmdhf"></tbody>
@@ -1464,6 +1471,11 @@ const RUJUK = [
 
 // ── RENDER FUNCTIONS ───────────────────────────────────────
 
+function ewsCell(p) {
+  return p.ews != null
+    ? `<span class="tag ${p.sev==='crit'?'critical':p.sev==='warn'?'pending':'stable'}">EWS ${p.ews}</span><div class="ts" style="margin-top:2px">${p.sev==='crit'?'Risiko Tinggi':p.sev==='warn'?'Risiko Sedang':'Risiko Rendah'}</div>`
+    : '<span class="tag" style="color:var(--txt3)">Belum ada EWS</span>';
+}
 function sevClass(sev) {
   return sev==='crit'?'sev-l':sev==='warn'?'sev-m':sev==='ok'?'sev-s':'sev-n';
 }
@@ -1501,12 +1513,7 @@ function renderPerhatian() {
       <td class="td" style="max-width:200px">${p.diag}</td>
       <td class="ts">${p.dpjp}</td>
       <td>
-        ${p.ews != null
-          ? `<span class="tag ${p.sev==='crit'?'critical':p.sev==='warn'?'pending':'stable'}">EWS ${p.ews}</span><div class="ts" style="margin-top:2px">${p.sev==='crit'?'Risiko Tinggi':p.sev==='warn'?'Risiko Sedang':'Risiko Rendah'}</div>`
-          : p.sev==='crit'?'<span class="tag critical">Kritis</span>':
-            p.sev==='warn'?'<span class="tag pending">Waspada</span>':
-            p.sev==='ok'?'<span class="tag stable">Stabil</span>':
-            '<span class="tag" style="color:var(--txt3)">Belum ada EWS</span>'}
+        ${ewsCell(p)}
         ${p.rujuk ? '<div style="margin-top:4px"><span class="tag info">Rencana Rujuk</span></div>' : ''}
       </td>
       <td><button class="xbtn" onclick="toggleSoap(this,'soap-${i}')">SOAP ▾</button></td>
@@ -1577,7 +1584,7 @@ function renderDmDhf() {
   const tbody = document.getElementById('tbl-dmdhf');
   tbody.innerHTML = DM_DHF.map((p,i) => `
     <tr>
-      <td class="tc ts">${p.no}</td>
+      <td class="${sevClass(p.sev)} tc ts">${p.no}</td>
       <td>
         <div class="tn">${p.nama}</div>
         <div class="ts">${p.usia ? p.usia + ' thn · ' : ''}${eselonBadge(p.eselon)}</div>
@@ -1586,25 +1593,25 @@ function renderDmDhf() {
       <td class="td">${p.diag}</td>
       <td class="ts">${p.dpjp}</td>
       <td class="ts" style="min-width:200px">${p.lab}</td>
-      <td class="td">${p.terapi}</td>
       <td>
-        <button class="fu-btn" onclick="toggleFU(this,'dmfu-${i}')">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5h8M6 2l3 3-3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          ${(p.followup||[]).length} Hari
-        </button>
+        ${ewsCell(p)}
+        ${p.rujuk ? '<div style="margin-top:4px"><span class="tag info">Rencana Rujuk</span></div>' : ''}
       </td>
+      <td><button class="xbtn" onclick="toggleSoap(this,'dmsoap-${i}')">Detail ▾</button></td>
     </tr>
-    <tr class="xrow" id="dmfu-${i}">
-      <td colspan="8" style="padding:0 0 0 12px;background:var(--surf2)">
-        <div class="fu-timeline">
-          <div class="fu-day-hdr"><span>Hari</span><span>Tgl</span><span>Lab / Pemeriksaan</span><span>Terapi / Follow Up</span></div>
-          ${(p.followup||[]).map(d => `
-          <div class="fu-day">
-            <div class="fu-hari">${d.hari}</div>
-            <div class="ts">${d.tgl}</div>
-            <div class="fu-vital ts">${d.vital}</div>
-            <div class="fu-note td">${d.catatan}</div>
-          </div>`).join('')}
+    <tr class="xrow" id="dmsoap-${i}">
+      <td colspan="8" style="padding:0 12px 12px">
+        <div class="soap-box">
+          ${p.anam ? `<div><span class="sk">Anamnesis / PF</span> ${p.anam}</div>` : ''}
+          <div style="margin-top:6px"><span class="sk">Update Terapi</span> ${p.terapi || '-'}</div>
+          <div style="margin-top:6px"><span class="sk">Follow Up</span> ${p.fu || '-'}</div>
+          ${p.tglUpdate ? `<div class="ts" style="margin-top:6px">Update terakhir: ${p.tglUpdate}</div>` : ''}
+          ${p.history && p.history.length ? `
+          <div class="fu-timeline" style="margin-top:10px;border:1px solid var(--bdr);border-radius:8px;overflow:hidden">
+            <div class="fu-day-hdr"><span>Hari</span><span>Tgl</span><span>Lab / Pemeriksaan</span><span>Terapi / Follow Up</span></div>
+            ${p.history.map(h => `<div class="fu-day"><div class="fu-hari">${h.hari}</div><div class="ts">${h.tgl}</div><div class="fu-note td">${h.a}</div><div class="fu-note td">${h.b}</div></div>`).join('')}
+          </div>` : ''}
+          <div class="img-gallery">${gallerySlots('dm', p, ['Lab/Darah','Foto Klinis','Lainnya'])}          </div>
         </div>
       </td>
     </tr>
@@ -2329,6 +2336,13 @@ function updateCounts() {
     tiles[2].textContent = cnt('ok');
     tiles[3].textContent = PERHATIAN.filter(p => p.rujuk).length;
   }
+  // Kotak statistik: DM & DHF
+  const dt = document.querySelectorAll('#sec-dmdhf .stat-m .sm-val');
+  if (dt.length >= 4) {
+    const c = k => DM_DHF.filter(p => p.sev === k).length;
+    dt[0].textContent = c('crit'); dt[1].textContent = c('warn'); dt[2].textContent = c('ok');
+    dt[3].textContent = DM_DHF.filter(p => p.rujuk).length;
+  }
   // Kotak statistik: ICU / NICU / PICU
   const unitN = u => ICU_DATA.filter(p => (p.unit || '').toUpperCase() === u).length;
   const it = document.querySelectorAll('#sec-icu .stat-m');
@@ -2697,21 +2711,29 @@ async function loadFromSheets() {
     }
 
     // ── DM / DHF Khusus ───────────────────────
-    // Sama seperti Pasien Perhatian: 1 pasien = 1 baris; baris per hari jadi riwayat follow-up.
+    // Sama seperti Pasien Perhatian: 1 pasien = 1 baris; baris per hari jadi riwayat.
+    // Kolom opsional: SKOR EWS (NEWS2, angka) dan RENCANA RUJUK (Ya/Tidak).
     {
-      const entries = csvToObjects(parseCSV(csvDM)).filter(r => pick(r, /NAMAPASIEN|^Nama/i)).map((r, i) => ({
-        i, tgl: pick(r, /^TANGGAL$/i), date: parseDateID(pick(r, /^TANGGAL$/i)),
-        nama: pick(r, /NAMAPASIEN|^Nama/i), mrs: pick(r, /^TANGGALMRS$/i),
-        usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
-        eselon: pick(r, /ESELON/i), ruangan: pick(r, /^RUANGAN$/i).trim(), diag: pick(r, /DIAGNOSA/i), dpjp: pick(r, /DPJP/i),
-        lab: pick(r, /PENUNJANG/i, /ANAMNESIS/i),
-        terapi: [pick(r, /TERAPI/i), pick(r, /FOLLOWUP/i)].filter(Boolean).join(' · '),
-      }));
+      const entries = csvToObjects(parseCSV(csvDM)).filter(r => pick(r, /NAMAPASIEN|^Nama/i)).map((r, i) => {
+        const anam = pick(r, /ANAMNESIS/i), peng = pick(r, /PENUNJANG/i);
+        return {
+          i, tgl: pick(r, /^TANGGAL$/i), date: parseDateID(pick(r, /^TANGGAL$/i)),
+          nama: pick(r, /NAMAPASIEN|^Nama/i), mrs: pick(r, /^TANGGALMRS$/i),
+          usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
+          eselon: pick(r, /ESELON/i), ruangan: pick(r, /^RUANGAN$/i).trim(), diag: pick(r, /DIAGNOSA/i), dpjp: pick(r, /DPJP/i),
+          anam: peng ? anam : '', lab: peng || anam,
+          terapi: pick(r, /TERAPI/i), fu: pick(r, /FOLLOWUP/i),
+          ews: parseEws(pick(r, /^(SKOREWS|EWS|NEWS2?|SKORNEWS2?)$/i)),
+          rujukRaw: (pick(r, /RENCANARUJUK/i) || '').trim(),
+        };
+      });
       DM_DHF.splice(0, DM_DHF.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
         const L = g[g.length - 1];
         return { no: n + 1, nama: L.nama, usia: L.usia, eselon: L.eselon, ruangan: L.ruangan, diag: L.diag, dpjp: L.dpjp,
-                 lab: L.lab, terapi: L.terapi,
-                 followup: g.map((e, k) => ({ hari: 'H' + (k + 1), tgl: e.tgl || '', vital: e.lab, catatan: e.terapi })) };
+                 lab: L.lab, anam: L.anam, terapi: L.terapi, fu: L.fu, tglUpdate: L.tgl,
+                 ews: L.ews, sev: L.ews !== null ? ewsSev(L.ews) : 'na',
+                 rujuk: isYes((g.slice().reverse().find(e => e.rujukRaw) || {}).rujukRaw),
+                 history: histRows(g.slice(0, -1), [e => e.lab, e => [e.terapi, e.fu].filter(Boolean).join(' · ')]) };
       }));
     }
 
