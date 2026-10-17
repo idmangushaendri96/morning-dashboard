@@ -2709,7 +2709,7 @@ async function loadFromSheets() {
       OPERASI.splice(0, OPERASI.length, ...opRows.map((r,i) => ({
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
-        jam: r.Jam_Rencana || '-', status: (r.Status||'').toLowerCase() === 'em' ? 'em' : 'ok',
+        jam: r.Jam_Rencana || '-', status: /^(em|emergensi|emergency|darurat|cito)$/i.test((r.Status||'').trim()) ? 'em' : 'ok',
       })));
     }
 
