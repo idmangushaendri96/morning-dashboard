@@ -1639,7 +1639,7 @@ function renderPulang() {
       <td class="ts">${p.dpjp}</td>
       <td class="ts">${p.mrs}</td>
       <td class="tc ts" style="font-weight:700">${p.los}hr</td>
-      <td><span class="tag info">TTG Visite Dokter</span></td>
+      <td>${p.ket ? `<span class="tag info">${p.ket}</span>` : '<span class="ts">-</span>'}</td>
     </tr>
   `).join('');
 }
@@ -2717,7 +2717,7 @@ async function loadFromSheets() {
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
         usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
-        mrs: r.MRS_Tgl, los: r.LOS || 0,
+        mrs: r.MRS_Tgl, los: r.LOS || 0, ket: (r.Keterangan || '').trim(),
       })));
     }
 
