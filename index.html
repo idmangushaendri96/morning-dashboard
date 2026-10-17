@@ -1819,7 +1819,7 @@ function renderChart() {
 // ── FOTO PASIEN ─────────────────────────────────────────────
 // Banyak foto per kategori. Jika PHOTO_API.URL diisi (Google Apps Script → folder Drive), foto dibagikan ke semua
 // perangkat; jika kosong, foto hanya disimpan di browser ini (IndexedDB). Panduan: apps-script/PANDUAN.md
-const PHOTO_API = { URL: '' };                       // ← tempel URL web app (…/exec) di sini
+const PHOTO_API = { URL: 'https://script.google.com/macros/s/AKfycbwD9bTvhcyG-nZL12yj1AA4p_GIi1aoLegONvpvvyXq7lESwCbMTYa1ytVyymc--XVCAA/exec' };                       // ← tempel URL web app (…/exec) di sini
 const PIN_KEY = 'mm-photo-pin';
 const getPin = () => { try { return localStorage.getItem(PIN_KEY) || ''; } catch (e) { return ''; } };
 const setPin = v => { try { v ? localStorage.setItem(PIN_KEY, v) : localStorage.removeItem(PIN_KEY); } catch (e) {} };
