@@ -819,6 +819,8 @@ td.sev-n { border-left: 3px solid transparent; }
 .lb-btn { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; padding: 7px 16px; font: 600 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
 .lb-btn:hover { background: rgba(255,255,255,.28); }
 .lb-del { border-color: rgba(255,120,120,.6); color: #ffb3b3; }
+.img-thumb.loading { color: var(--txt3); font-size: 14px; cursor: default; }
+.pin-bar { position: fixed; right: 16px; bottom: 16px; z-index: 9000; background: var(--navy, #1B4F8B); color: #fff; border: none; border-radius: 20px; padding: 9px 16px; font: 700 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
 .lb-del.confirm { background: #c0392b; color: #fff; border-color: #c0392b; }
 
 /* ── LIGHTBOX ──────────────────────────────────────────────── */
@@ -1814,9 +1816,16 @@ function renderChart() {
 
 // ── IMAGE UPLOAD & LIGHTBOX ─────────────────────────────────
 
-// Foto pasien: banyak foto per kategori, disimpan di IndexedDB browser ini (tahan refresh & auto-refresh).
-// Catatan: tersimpan per browser/komputer, tidak dibagikan antar perangkat.
-const IMGS = {};                       // slotKey -> [{id, data}]
+// ── FOTO PASIEN ─────────────────────────────────────────────
+// Banyak foto per kategori. Jika PHOTO_API.URL diisi (Google Apps Script → folder Drive), foto dibagikan ke semua
+// perangkat; jika kosong, foto hanya disimpan di browser ini (IndexedDB). Panduan: apps-script/PANDUAN.md
+const PHOTO_API = { URL: '' };                       // ← tempel URL web app (…/exec) di sini
+const PIN_KEY = 'mm-photo-pin';
+const getPin = () => { try { return localStorage.getItem(PIN_KEY) || ''; } catch (e) { return ''; } };
+const setPin = v => { try { v ? localStorage.setItem(PIN_KEY, v) : localStorage.removeItem(PIN_KEY); } catch (e) {} };
+const REMOTE = () => !!PHOTO_API.URL;
+
+const IMGS = {};                       // slotKey -> [{id, data|null}]
 let imgDbP = null;
 function imgDb() {
   if (imgDbP) return imgDbP;
@@ -1839,10 +1848,70 @@ async function imgTx(mode, fn) {
 }
 const imgSave = rec => imgTx('readwrite', st => st.put(rec)).catch(() => {});
 const imgDel  = id  => imgTx('readwrite', st => st.delete(id)).catch(() => {});
+
+// ── Panggilan ke Apps Script (POST text/plain agar tanpa preflight CORS)
+async function photoCall(body) {
+  const r = await fetch(PHOTO_API.URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ ...body, pin: getPin() }) });
+  const j = await r.json();
+  if (!j.ok) { if (/PIN/i.test(j.error || '')) { setPin(''); pinBar(); } throw new Error(j.error || 'Gagal'); }
+  return j;
+}
+function pinBar() {
+  let b = document.getElementById('pin-bar');
+  if (!REMOTE() || getPin()) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('button'); b.id = 'pin-bar'; b.className = 'pin-bar';
+    b.textContent = '🔒 Foto — masukkan PIN'; b.onclick = askPin; document.body.appendChild(b);
+  }
+}
+function askPin() {
+  const v = (window.prompt('Masukkan PIN foto pasien:') || '').trim();
+  if (!v) return false;
+  setPin(v); pinBar(); remoteSync(); return true;
+}
+
+// Antrean unduh foto (maks 3 bersamaan); hasil di-cache di IndexedDB
+const fetchQ = []; let fetching = 0;
+function queueFetch(slot, im) { fetchQ.push({ slot, im }); pumpFetch(); }
+function pumpFetch() {
+  while (fetching < 3 && fetchQ.length) {
+    const { slot, im } = fetchQ.shift(); fetching++;
+    photoCall({ action: 'get', id: im.id })
+      .then(j => { im.data = j.data; imgSave({ id: im.id, slot, data: j.data, t: Date.now() }); })
+      .catch(() => { im.failed = true; })
+      .finally(() => { fetching--; repaintSlot(slot); pumpFetch(); });
+  }
+}
+async function remoteSync() {
+  if (!REMOTE() || !getPin()) return;
+  try {
+    const cache = {};
+    (await imgTx('readonly', st => st.getAll()).catch(() => [])).forEach(r => cache[r.id] = r);
+    const { items } = await photoCall({ action: 'list' });
+    const seen = new Set(), fresh = {};
+    items.forEach(it => {
+      seen.add(it.id);
+      const old = (IMGS[it.slot] || []).find(x => x.id === it.id);
+      const im = old || { id: it.id, data: cache[it.id] ? cache[it.id].data : null };
+      (fresh[it.slot] = fresh[it.slot] || []).push(im);
+      if (!im.data && !im.failed && !fetchQ.some(q => q.im === im)) queueFetch(it.slot, im);
+    });
+    Object.keys(IMGS).forEach(k => delete IMGS[k]);
+    Object.assign(IMGS, fresh);
+    Object.keys(cache).forEach(id => { if (!seen.has(id)) imgDel(id); });   // buang cache foto yang sudah dihapus di server
+    hydrateGallery();
+  } catch (e) { showBanner('⚠️ Foto: ' + e.message, 'warn'); }
+}
 const imgsReady = (async () => {
+  if (REMOTE()) {
+    pinBar(); await remoteSync();
+    setInterval(() => { if (!document.hidden) remoteSync(); }, 2 * 60 * 1000);
+    return;
+  }
   try {
     const all = await imgTx('readonly', st => st.getAll());
-    const old = Date.now() - 30 * 86400000;                    // buang foto > 30 hari
+    const old = Date.now() - 30 * 86400000;                    // buang foto lokal > 30 hari
     all.sort((a, b) => a.t - b.t).forEach(r => {
       if (r.t < old) { imgDel(r.id); return; }
       (IMGS[r.slot] = IMGS[r.slot] || []).push({ id: r.id, data: r.data });
@@ -1851,6 +1920,7 @@ const imgsReady = (async () => {
   hydrateGallery();
 })();
 
+// ── Tampilan galeri
 function gallerySlots(scope, p, types) {
   const base = scope + '|' + (p.nama || '') + '|' + (p.mrs || p.tgl || '');
   return types.map(type => `
@@ -1864,11 +1934,21 @@ function paintSlot(el) {
   const list = IMGS[decodeURIComponent(el.dataset.slot)] || [];
   const addIcon = '<svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="var(--txt3)" stroke-width="1.6" stroke-linecap="round"/></svg>';
   el.querySelector('.img-row').innerHTML =
-    list.map((im, n) => `<div class="img-thumb has" onclick="lbOpen(this, ${n})"><img src="${im.data}" alt=""></div>`).join('') +
+    list.map((im, n) => im.data
+      ? `<div class="img-thumb has" onclick="lbOpen(this, ${n})"><img src="${im.data}" alt=""></div>`
+      : `<div class="img-thumb has loading" title="${im.failed ? 'Gagal dimuat' : 'Memuat…'}"><span>${im.failed ? '⚠️' : '…'}</span></div>`).join('') +
     `<label class="img-thumb add" title="Tambah foto (bisa pilih banyak)"><div class="img-thumb-empty">${addIcon}<span>${list.length ? 'Tambah' : 'Upload'}</span></div>` +
-    `<input type="file" accept="image/*" multiple onchange="addImgs(this)"></label>`;
+    `<input type="file" accept="image/*" multiple onclick="return photoGate(event)" onchange="addImgs(this)"></label>`;
 }
 function hydrateGallery() { document.querySelectorAll('.img-slot[data-slot]').forEach(paintSlot); }
+function repaintSlot(slot) {
+  document.querySelectorAll('.img-slot[data-slot]').forEach(el => { if (decodeURIComponent(el.dataset.slot) === slot) paintSlot(el); });
+  if (document.getElementById('lightbox').classList.contains('open') && LB.slot === slot) lbShow();
+}
+function photoGate(e) {                 // mode bersama: butuh PIN sebelum memilih file
+  if (REMOTE() && !getPin()) { e.preventDefault(); askPin(); return false; }
+  return true;
+}
 
 // Kecilkan foto (maks 1280px, JPEG) supaya hemat penyimpanan
 function shrinkImg(file) {
@@ -1890,18 +1970,21 @@ function shrinkImg(file) {
     fr.readAsDataURL(file);
   });
 }
+const newId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function addImgs(input) {
   const slotEl = input.closest('.img-slot'), slot = slotOf(input);
   const files = [...input.files]; input.value = '';
   for (const f of files) {
-    try {
-      const data = await shrinkImg(f);
-      const rec = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), slot, data, t: Date.now() };
-      (IMGS[slot] = IMGS[slot] || []).push({ id: rec.id, data });
-      imgSave(rec);
-    } catch (e) { showBanner('⚠️ Gagal membaca salah satu foto', 'warn'); }
+    let data;
+    try { data = await shrinkImg(f); } catch (e) { showBanner('⚠️ Gagal membaca salah satu foto', 'warn'); continue; }
+    const im = { id: newId(), data, pending: true };
+    (IMGS[slot] = IMGS[slot] || []).push(im); paintSlot(slotEl);
+    if (REMOTE()) {
+      try { const j = await photoCall({ action: 'add', slot, data }); im.id = j.id; imgSave({ id: j.id, slot, data, t: Date.now() }); }
+      catch (e) { IMGS[slot].splice(IMGS[slot].indexOf(im), 1); showBanner('⚠️ Foto gagal diunggah: ' + e.message, 'warn'); }
+    } else imgSave({ id: im.id, slot, data, t: Date.now() });
+    delete im.pending; paintSlot(slotEl);
   }
-  paintSlot(slotEl);
 }
 
 // Lightbox: navigasi, ganti, hapus
@@ -1914,7 +1997,7 @@ function lbShow() {
   const list = IMGS[LB.slot] || [];
   if (!list.length) { lbClose(); return; }
   LB.idx = (LB.idx + list.length) % list.length;
-  document.getElementById('lb-img').src = list[LB.idx].data;
+  document.getElementById('lb-img').src = list[LB.idx].data || '';
   document.getElementById('lb-label').textContent = `${LB.label} · ${LB.idx + 1} / ${list.length}`;
   document.querySelectorAll('.lb-nav').forEach(b => b.style.display = list.length > 1 ? '' : 'none');
   const d = document.getElementById('lb-del'); d.textContent = 'Hapus'; d.classList.remove('confirm');
@@ -1922,19 +2005,24 @@ function lbShow() {
 function lbStep(d) { LB.idx += d; lbShow(); }
 function lbClose() {
   document.getElementById('lightbox').classList.remove('open');
-  document.querySelectorAll('.img-slot[data-slot]').forEach(el => { if (decodeURIComponent(el.dataset.slot) === LB.slot) paintSlot(el); });
+  repaintSlot(LB.slot);
 }
 async function lbReplace(input) {
   const f = input.files[0]; input.value = ''; if (!f) return;
+  const im = (IMGS[LB.slot] || [])[LB.idx]; if (!im) return;
   try {
-    const data = await shrinkImg(f), im = IMGS[LB.slot][LB.idx];
+    const data = await shrinkImg(f);
+    if (REMOTE()) { const j = await photoCall({ action: 'replace', id: im.id, slot: LB.slot, data }); imgDel(im.id); im.id = j.id; }
     im.data = data; imgSave({ id: im.id, slot: LB.slot, data, t: Date.now() }); lbShow();
-  } catch (e) { showBanner('⚠️ Gagal membaca foto pengganti', 'warn'); }
+  } catch (e) { showBanner('⚠️ Gagal mengganti foto: ' + e.message, 'warn'); }
 }
-function lbDelete() {
+async function lbDelete() {
   const d = document.getElementById('lb-del');
   if (!d.classList.contains('confirm')) { d.textContent = 'Yakin hapus?'; d.classList.add('confirm'); return; }
-  const [im] = IMGS[LB.slot].splice(LB.idx, 1); imgDel(im.id); lbShow();
+  const im = IMGS[LB.slot][LB.idx]; if (!im) return;
+  try { if (REMOTE()) await photoCall({ action: 'delete', id: im.id }); }
+  catch (e) { showBanner('⚠️ Gagal menghapus foto: ' + e.message, 'warn'); lbShow(); return; }
+  IMGS[LB.slot].splice(LB.idx, 1); imgDel(im.id); lbShow();
 }
 document.addEventListener('keydown', e => {
   if (!document.getElementById('lightbox').classList.contains('open')) return;
