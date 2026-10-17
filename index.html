@@ -1187,7 +1187,7 @@ td.sev-n { border-left: 3px solid transparent; }
                 <th>Unit</th>
                 <th>Diagnosa</th>
                 <th>DPJP</th>
-                <th>Vital Hari Ini</th>
+                <th>SOAP Hari Ini</th>
                 <th>Catatan</th>
                 <th>Follow Up</th>
               </tr>
@@ -1563,7 +1563,7 @@ function renderICU() {
           <div class="fu-day-hdr">
             <span>Hari</span>
             <span>Tgl</span>
-            <span>Vital Signs</span>
+            <span>SOAP</span>
             <span>Catatan Perkembangan</span>
           </div>
           ${p.followup.map(d => `
@@ -2627,14 +2627,14 @@ async function loadFromSheets() {
     }
 
     // ── ICU ───────────────────────────────────
-    // Kolom wajib: Nama, MRS_Tgl, Unit, Diagnosa, DPJP, Vital_Signs, Catatan. Tambah kolom "Tanggal"
-    // agar follow-up per hari: salin baris pasien, ubah Tanggal + Vital_Signs + Catatan.
+    // Kolom wajib: Nama, MRS_Tgl, Unit, Diagnosa, DPJP, SOAP, Catatan. Tambah kolom "Tanggal"
+    // agar follow-up per hari: salin baris pasien, ubah Tanggal + SOAP + Catatan.
     {
       const entries = csvToObjects(parseCSV(csvICU)).filter(r => pick(r, /^Nama/i)).map((r, i) => ({
         i, tgl: pick(r, /^Tanggal$/i), date: parseDateID(pick(r, /^Tanggal$/i)),
         nama: pick(r, /^Nama/i), mrs: pick(r, /^(MRS_?Tgl|TANGGALMRS)$/i), eselon: pick(r, /^Eselon$/i), unit: pick(r, /^Unit$/i),
         usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
-        diag: pick(r, /^Diagnosa$/i), dpjp: pick(r, /^DPJP$/i), vital: pick(r, /^Vital/i), catatan: pick(r, /^Catatan$/i),
+        diag: pick(r, /^Diagnosa$/i), dpjp: pick(r, /^DPJP$/i), vital: pick(r, /^(SOAP|Vital)/i), catatan: pick(r, /^Catatan$/i),
       }));
       ICU_DATA.splice(0, ICU_DATA.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
         const L = g[g.length - 1];
