@@ -1543,7 +1543,7 @@ function renderICU() {
       <td class="tc ts">${p.no}</td>
       <td>
         <div class="tn">${p.nama}</div>
-        <div class="ts">${eselonBadge(p.eselon)} · MRS ${p.tgl}</div>
+        <div class="ts">${p.usia ? p.usia + ' thn · ' : ''}${eselonBadge(p.eselon)} · MRS ${p.tgl}</div>
       </td>
       <td>${unitBadge(p.unit)}</td>
       <td class="td" style="max-width:160px">${p.diag}</td>
@@ -2632,12 +2632,13 @@ async function loadFromSheets() {
     {
       const entries = csvToObjects(parseCSV(csvICU)).filter(r => pick(r, /^Nama/i)).map((r, i) => ({
         i, tgl: pick(r, /^Tanggal$/i), date: parseDateID(pick(r, /^Tanggal$/i)),
-        nama: pick(r, /^Nama/i), mrs: pick(r, /^MRS_?Tgl$/i), eselon: pick(r, /^Eselon$/i), unit: pick(r, /^Unit$/i),
+        nama: pick(r, /^Nama/i), mrs: pick(r, /^(MRS_?Tgl|TANGGALMRS)$/i), eselon: pick(r, /^Eselon$/i), unit: pick(r, /^Unit$/i),
+        usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
         diag: pick(r, /^Diagnosa$/i), dpjp: pick(r, /^DPJP$/i), vital: pick(r, /^Vital/i), catatan: pick(r, /^Catatan$/i),
       }));
       ICU_DATA.splice(0, ICU_DATA.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
         const L = g[g.length - 1];
-        return { no: n + 1, nama: L.nama, eselon: L.eselon, tgl: L.mrs, unit: L.unit, diag: L.diag, dpjp: L.dpjp,
+        return { no: n + 1, nama: L.nama, usia: L.usia, eselon: L.eselon, tgl: L.mrs, unit: L.unit, diag: L.diag, dpjp: L.dpjp,
                  vital: L.vital, catatan: L.catatan,
                  followup: g.map((e, k) => ({ hari: 'H' + (k + 1), tgl: e.tgl || '', vital: e.vital, catatan: e.catatan })) };
       }));
@@ -2740,11 +2741,25 @@ async function loadFromSheets() {
     // ── Rencana Operasi ───────────────────────
     const opRows = csvToObjects(parseCSV(csvOperasi));
     { // tab kosong = daftar kosong (jangan tampilkan data contoh)
-      OPERASI.splice(0, OPERASI.length, ...opRows.map((r,i) => ({
-        no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
+      // Kolom Tanggal: tampilkan operasi hari ini; bila tak ada yang hari ini, pakai tanggal terbaru di sheet.
+      const all = opRows.filter(r => (r.Nama || '').trim()).map(r => ({ r, d: parseDateID(r.Tanggal) }));
+      const ymd = d => d ? d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate() : 0;
+      const nowWIB = new Date(Date.now() + 7 * 3600e3);
+      const todayK = nowWIB.getUTCFullYear() * 10000 + (nowWIB.getUTCMonth() + 1) * 100 + nowWIB.getUTCDate();
+      const keys = all.map(x => ymd(x.d)).filter(Boolean);
+      const target = keys.includes(todayK) ? todayK : (keys.length ? Math.max(...keys) : 0);
+      const shown = target ? all.filter(x => !x.d || ymd(x.d) === target) : all;
+      OPERASI.splice(0, OPERASI.length, ...shown.map(({ r }, i) => ({
+        no: i + 1, nama: r.Nama, eselon: r.Eselon,
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
         jam: r.Jam_Rencana || '-', status: /^(em|emergensi|emergency|darurat|cito)$/i.test((r.Status||'').trim()) ? 'em' : 'ok',
       })));
+      if (target) {
+        const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        const tg = `${target % 100} ${BLN[Math.floor(target / 100) % 100 - 1]} ${Math.floor(target / 10000)}`;
+        const h2 = document.querySelector('#sec-operasi .sec-hdr h2'); if (h2) h2.textContent = `Rencana Operasi — ${tg}`;
+        window.OPERASI_TGL = tg;
+      }
     }
 
     // ── Prediksi Pulang ───────────────────────
@@ -2754,7 +2769,9 @@ async function loadFromSheets() {
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
         usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
-        mrs: r.MRS_Tgl, los: r.LOS || 0, ket: (r.Keterangan || '').trim(),
+        mrs: r.MRS_Tgl, ket: (r.Keterangan || '').trim(),
+        los: (() => { const v = parseInt(String(r.LOS ?? '').replace(/\D/g, ''), 10); if (!isNaN(v)) return v;
+                      const d = parseDateID(r.MRS_Tgl); return d ? Math.max(0, Math.round((Date.now() - d) / 864e5)) : 0; })(),
       })));
     }
 
