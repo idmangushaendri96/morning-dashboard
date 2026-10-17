@@ -1138,9 +1138,9 @@ td.sev-n { border-left: 3px solid transparent; }
       </div>
 
       <div class="stat-row">
-        <div class="stat-m"><div class="sm-lbl">Kritis</div><div class="sm-val r">2</div><div class="sm-sub">perlu intervensi segera</div></div>
-        <div class="stat-m"><div class="sm-lbl">Waspada</div><div class="sm-val o">2</div><div class="sm-sub">monitoring ketat</div></div>
-        <div class="stat-m"><div class="sm-lbl">Stabil</div><div class="sm-val g">2</div><div class="sm-sub">observasi rutin</div></div>
+        <div class="stat-m"><div class="sm-lbl">EWS Tinggi</div><div class="sm-val r">2</div><div class="sm-sub">skor ≥ 7 · respons emergensi</div></div>
+        <div class="stat-m"><div class="sm-lbl">EWS Sedang</div><div class="sm-val o">2</div><div class="sm-sub">skor 5–6 · review urgen</div></div>
+        <div class="stat-m"><div class="sm-lbl">EWS Rendah</div><div class="sm-val g">2</div><div class="sm-sub">skor 0–4 · observasi rutin</div></div>
         <div class="stat-m"><div class="sm-lbl">Rencana Rujuk</div><div class="sm-val b">2</div><div class="sm-sub">sisrute proses</div></div>
       </div>
 
@@ -1501,9 +1501,12 @@ function renderPerhatian() {
       <td class="td" style="max-width:200px">${p.diag}</td>
       <td class="ts">${p.dpjp}</td>
       <td>
-        ${p.sev==='crit'?'<span class="tag critical">Kritis</span>':
-          p.sev==='warn'?'<span class="tag pending">Waspada</span>':
-          '<span class="tag stable">Stabil</span>'}
+        ${p.ews != null
+          ? `<span class="tag ${p.sev==='crit'?'critical':p.sev==='warn'?'pending':'stable'}">EWS ${p.ews}</span><div class="ts" style="margin-top:2px">${p.sev==='crit'?'Risiko Tinggi':p.sev==='warn'?'Risiko Sedang':'Risiko Rendah'}</div>`
+          : p.sev==='crit'?'<span class="tag critical">Kritis</span>':
+            p.sev==='warn'?'<span class="tag pending">Waspada</span>':
+            p.sev==='ok'?'<span class="tag stable">Stabil</span>':
+            '<span class="tag" style="color:var(--txt3)">Belum ada EWS</span>'}
         ${p.rujuk ? '<div style="margin-top:4px"><span class="tag info">Rencana Rujuk</span></div>' : ''}
       </td>
       <td><button class="xbtn" onclick="toggleSoap(this,'soap-${i}')">SOAP ▾</button></td>
@@ -2265,6 +2268,14 @@ function calcAge(s) {
   if (now.getMonth()+1 < m || (now.getMonth()+1 === m && now.getDate() < d)) age--;
   return age >= 0 && age < 130 ? String(age) : '';
 }
+// NEWS2: total skor → 'crit' (≥7 Tinggi) | 'warn' (5–6 Sedang) | 'ok' (0–4 Rendah); '' bila skor kosong/tidak valid
+function parseEws(v) {
+  const t = String(v ?? '').trim().replace(',', '.');
+  if (t === '' || isNaN(t)) return null;
+  const n = Math.round(Number(t));
+  return n >= 0 && n <= 20 ? n : null;
+}
+function ewsSev(n) { return n >= 7 ? 'crit' : n >= 5 ? 'warn' : 'ok'; }
 // Normalisasi status pasien → 'crit' | 'warn' | 'ok'
 function parseSev(v) {
   v = (v || '').toLowerCase();
@@ -2589,13 +2600,14 @@ async function loadFromSheets() {
         usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
         eselon: pick(r, /ESELON/i), ruangan: pick(r, /^RUANGAN$/i).trim(), diag: pick(r, /DIAGNOSA/i), dpjp: pick(r, /DPJP/i),
         soap: pick(r, /^SOAP$/i), fu: pick(r, /FOLLOWUP/i),
-        sev: parseSev(pick(r, /^(SEVERITY|STATUS|STATUSPASIEN|KONDISI)$/i)),
+        ews: parseEws(pick(r, /^(SKOREWS|EWS|NEWS2?|SKORNEWS2?)$/i)),
+        sevRaw: pick(r, /^(SEVERITY|STATUS|STATUSPASIEN|KONDISI)$/i),
         rujukRaw: (pick(r, /RENCANARUJUK/i) || '').trim(),
       }));
       PERHATIAN.splice(0, PERHATIAN.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
         const L = g[g.length - 1];
         return { no: n + 1, nama: L.nama, usia: L.usia, eselon: L.eselon, ruangan: L.ruangan, diag: L.diag, dpjp: L.dpjp,
-                 sev: L.sev, rujuk: isYes((g.slice().reverse().find(e => e.rujukRaw) || {}).rujukRaw), soap: L.soap, fu: L.fu, tglUpdate: L.tgl,
+                 ews: L.ews, sev: L.ews !== null ? ewsSev(L.ews) : (L.sevRaw ? parseSev(L.sevRaw) : 'na'), rujuk: isYes((g.slice().reverse().find(e => e.rujukRaw) || {}).rujukRaw), soap: L.soap, fu: L.fu, tglUpdate: L.tgl,
                  history: histRows(g.slice(0, -1), [e => e.soap, e => e.fu]) };
       }));
     }
