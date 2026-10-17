@@ -1472,8 +1472,11 @@ function eselonBadge(e) {
   if (!e) return '';
   const l=e.toLowerCase();
   if (l.includes('bpjs'))    return `<span class="badge b-bpjs">BPJS</span>`;
-  if (l.includes('asuransi')||l.includes('insurance')||l.includes('ins')) return `<span class="badge b-ins">Asuransi</span>`;
-  return `<span class="badge b-umum">Umum</span>`;
+  if (l === 'asuransi' || l === 'insurance') return `<span class="badge b-ins">Asuransi</span>`;
+  if (l === 'umum' || l === 'mandiri' || l === 'pribadi') return `<span class="badge b-umum">Umum</span>`;
+  // Penjamin lain (mis. Fullerton, Mandiri Inhealth, Prudential): tampilkan sesuai tulisan di sheet
+  const t = String(e).trim().replace(/[<>&"]/g, '');
+  return `<span class="badge b-ins">${t.charAt(0).toUpperCase() + t.slice(1)}</span>`;
 }
 
 function unitBadge(u) {
