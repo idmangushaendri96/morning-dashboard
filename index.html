@@ -2590,12 +2590,12 @@ async function loadFromSheets() {
         eselon: pick(r, /ESELON/i), ruangan: pick(r, /^RUANGAN$/i).trim(), diag: pick(r, /DIAGNOSA/i), dpjp: pick(r, /DPJP/i),
         soap: pick(r, /^SOAP$/i), fu: pick(r, /FOLLOWUP/i),
         sev: parseSev(pick(r, /^(SEVERITY|STATUS|STATUSPASIEN|KONDISI)$/i)),
-        rujuk: isYes(pick(r, /RENCANARUJUK/i)),
+        rujukRaw: (pick(r, /RENCANARUJUK/i) || '').trim(),
       }));
       PERHATIAN.splice(0, PERHATIAN.length, ...groupPatients(entries, e => e.nama + '|' + e.mrs).map((g, n) => {
         const L = g[g.length - 1];
         return { no: n + 1, nama: L.nama, usia: L.usia, eselon: L.eselon, ruangan: L.ruangan, diag: L.diag, dpjp: L.dpjp,
-                 sev: L.sev, rujuk: L.rujuk, soap: L.soap, fu: L.fu, tglUpdate: L.tgl,
+                 sev: L.sev, rujuk: isYes((g.slice().reverse().find(e => e.rujukRaw) || {}).rujukRaw), soap: L.soap, fu: L.fu, tglUpdate: L.tgl,
                  history: histRows(g.slice(0, -1), [e => e.soap, e => e.fu]) };
       }));
     }
