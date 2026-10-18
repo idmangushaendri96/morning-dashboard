@@ -1133,8 +1133,8 @@ td.sev-n { border-left: 3px solid transparent; }
                   <th style="text-align:right">Target Bulanan</th>
                   <th style="text-align:right">Current</th>
                   <th style="text-align:right">Perform%</th>
-                  <th style="text-align:right">YTD</th>
-                  <th style="text-align:right">Perform% YTD</th>
+                  <th style="text-align:right" title="Akumulasi (jumlah) atau rata-rata sejak tanggal 1 bulan ini sampai tanggal data terbaru">Bulan Ini</th>
+                  <th style="text-align:right" title="Indikator jumlah dibanding target bulanan yang dihitung proporsional sampai tanggal data terbaru; indikator rata-rata dibanding target bulanan">Perform% Bulan Ini</th>
                 </tr>
               </thead>
               <tbody id="tbody-operasional"></tbody>
@@ -2475,7 +2475,7 @@ function applyDaily(daily) {
       label: ind.label,
       tgtH: fmtN(ind.tH, ind.tH % 1 ? 1 : 0) + u, tgtM: fmtN(ind.tM, ind.tM % 1 ? 1 : 0) + u,
       curr: cur == null ? '-' : fmtN(cur, dec) + u, perf: pct(cur, ind.tH),
-      ytd: ytd == null ? '-' : fmtN(ytd, dec) + (ind.mode === 'avg' ? u : ''), perfYtd: pct(ytd, ind.tM),
+      ytd: ytd == null ? '-' : fmtN(ytd, dec) + (ind.mode === 'avg' ? u : ''), perfYtd: pct(ytd, ind.mode === 'sum' && ind.tM ? ind.tM * L.date.getDate() / new Date(L.date.getFullYear(), L.date.getMonth() + 1, 0).getDate() : ind.tM),
       avlos: !!ind.avlos,
     };
   }));
