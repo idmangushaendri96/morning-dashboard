@@ -2407,6 +2407,8 @@ const IND = [
   {id:'mcu',   label:'Kunjungan MCU',             re:/MCU/,                               tH:50,    tM:1485,  mode:'sum'},
   {id:'hd',    label:'Kunjungan HD',              re:/HD$/,                               tH:16,    tM:475,   mode:'sum'},
   {id:'partus',label:'Kelahiran',                 re:/^(JumlahPartus|Partus)$/,           tH:3,     tM:89,    mode:'sum'},
+  {id:'sc',    label:'Kelahiran SC',              re:/^-?SC$/i,                           tH:null,  tM:null,  mode:'sum'},
+  {id:'pn',    label:'Kelahiran PN',              re:/^-?PN$/i,                           tH:null,  tM:null,  mode:'sum'},
   {id:'ok',    label:'Kunjungan Kamar Bedah',     re:/KamarBedah/,                        tH:6,     tM:178,   mode:'sum'},
   {id:'pen',   label:'Kunjungan Penunjang Medis', re:/Penunjang/,                         tH:962,   tM:28571, mode:'sum'},
 ];
