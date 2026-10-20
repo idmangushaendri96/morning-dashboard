@@ -755,7 +755,6 @@ td.sev-n { border-left: 3px solid transparent; }
 .kd-tbl .tn { font-size: 12.5px; line-height: 1.4; }
 .kd-tbl .td { font-size: 11.5px; line-height: 1.55; }
 .kd-ico { margin-right: 6px; }
-.kd-nopri .kd-col-pri { display: none; }
 .kd-room { display: inline-block; font-size: 11px; font-weight: 600; color: var(--navy); background: var(--info-bg); border: 1px solid var(--info-bdr); border-radius: 6px; padding: 3px 8px; line-height: 1.35; }
 :root[data-theme="dark"] .kd-room { color: var(--txt); background: rgba(2,132,199,.16); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kd-room { color: var(--txt); background: rgba(2,132,199,.16); } }
@@ -1719,17 +1718,16 @@ function renderPulang() {
 function renderKendala() {
   const el = document.getElementById('kendala-list');
   const PRI = { crit:['Kritis','sev-l','kd-crit'], warn:['Perhatian','sev-m','kd-warn'], info:['Info','sev-n','kd-info'], ok:['Selesai','sev-s','kd-ok'] };
-  const showPri = KENDALA.some(k => k.hasType !== false && k.type && k.type !== 'info');
-  document.getElementById('sec-kendala').classList.toggle('kd-nopri', !showPri);
   if (!KENDALA.length) { el.innerHTML = '<tr><td colspan="8" class="kd-empty">Tidak ada kendala pelayanan tercatat.</td></tr>'; return; }
   el.innerHTML = KENDALA.map((k,i) => {
-    const [lbl, sev, cls] = PRI[k.type] || PRI.info;
+    const pr = PRI[k.type];
+    const [lbl, sev, cls] = pr || ['', 'sev-n', ''];
     return `
     <tr>
       <td class="tc ts sev ${sev}" style="font-weight:700">${i+1}</td>
       <td class="ts" style="white-space:nowrap">${k.tgl || '-'}</td>
       <td>${k.ruangan ? `<span class="kd-room">${nl(k.ruangan)}</span>` : '<span class="ts">-</span>'}</td>
-      <td class="kd-col-pri"><span class="kd-pri ${cls}">${lbl}</span></td>
+      <td class="kd-col-pri">${pr ? `<span class="kd-pri ${cls}">${lbl}</span>` : '<span class="ts">-</span>'}</td>
       <td class="tn">${k.ico ? `<span class="kd-ico">${k.ico}</span>` : ''}${nl(k.title)}${k.desc ? `<div class="td" style="font-weight:400;margin-top:3px">${nl(k.desc)}</div>` : ''}</td>
       <td class="ts" style="white-space:nowrap">${k.jam || '-'}</td>
       <td class="td kd-rtl">${nl(k.rtl) || '<span class="ts">-</span>'}</td>
@@ -2745,8 +2743,11 @@ async function loadFromSheets() {
       KENDALA.splice(0, KENDALA.length, ...kRows.map(r => ({
         // Supports both "clean" column names (Judul, Deskripsi, RTL) and
         // original CAPS format: JENIS KENDALA→JENISKENDALA, RENCANA TINDAK LANJUT→RENCANATINDAKLANJUT
-        type: (r.Type || 'info').toLowerCase(),
-        hasType: !!r.Type,
+        type: (() => { const v = String(r.Prioritas || r.PRIORITAS || r.Type || '').trim().toLowerCase();
+          if (/krit|crit|tinggi|urgent/.test(v)) return 'crit';
+          if (/perhat|warn|sedang/.test(v)) return 'warn';
+          if (/selesai|ok|tuntas|done/.test(v)) return 'ok';
+          return v ? 'info' : ''; })(),
         ruangan: r.Ruangan || r.RUANGAN || '',
         tgl: r.Tanggal || r.TANGGAL || '',
         jam: r.Jamkejadian || r.JAMKEJADIAN || '',
