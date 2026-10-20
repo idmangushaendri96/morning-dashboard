@@ -1710,7 +1710,7 @@ function renderPulang() {
       <td class="ts">${p.dpjp}</td>
       <td class="ts">${p.mrs}</td>
       <td class="tc ts" style="font-weight:700">${p.los}hr</td>
-      <td>${p.ket ? `<span class="tag info">${p.ket}</span>` : '<span class="ts">-</span>'}</td>
+      <td>${p.ket ? `<span class="tag info">${p.ket}</span>` : ''}${p.ket2 ? `<div class="td" style="margin-top:${p.ket ? 4 : 0}px">${nl(p.ket2)}</div>` : ''}${(!p.ket && !p.ket2) ? '<span class="ts">-</span>' : ''}</td>
     </tr>
   `).join('');
 }
@@ -2877,7 +2877,7 @@ async function loadFromSheets() {
         no: r.No || i+1, nama: r.Nama, eselon: r.Eselon,
         usia: pick(r, /^Usia$/i) || calcAge(pick(r, /LAHIR/i)),
         ruangan: r.Ruangan, diag: r.Diagnosa, dpjp: r.DPJP,
-        mrs: r.MRS_Tgl, ket: (r.Keterangan || '').trim(),
+        mrs: r.MRS_Tgl, ket: (r.Keterangan || '').trim(), ket2: (pick(r, /^KETERANGANLAIN/i) || '').trim(),
         los: (() => { const v = parseInt(String(r.LOS ?? '').replace(/\D/g, ''), 10); if (!isNaN(v)) return v;
                       const d = parseDateID(r.MRS_Tgl); return d ? Math.max(0, Math.round((Date.now() - d) / 864e5)) : 0; })(),
       })));
