@@ -744,6 +744,36 @@ td.sev-n { border-left: 3px solid transparent; }
   height: auto;
 }
 
+/* KENDALA — tabel */
+.kd-tbl { min-width: 860px; }
+.kd-tbl tbody td { padding: 12px; }
+.kd-tbl td.sev { border-left: 4px solid transparent; }
+.kd-tbl td.sev-l { border-left-color: var(--crit); }
+.kd-tbl td.sev-m { border-left-color: var(--warn); }
+.kd-tbl td.sev-s { border-left-color: var(--ok); }
+.kd-tbl td.sev-n { border-left-color: var(--info); }
+.kd-tbl .tn { font-size: 12.5px; line-height: 1.4; }
+.kd-tbl .td { font-size: 11.5px; line-height: 1.55; }
+.kd-ico { margin-right: 6px; }
+.kd-pri { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; border: 1px solid; white-space: nowrap; }
+.kd-pri.kd-crit { background: var(--crit-bg); color: var(--crit); border-color: var(--crit-bdr); }
+.kd-pri.kd-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bdr); }
+.kd-pri.kd-info { background: var(--info-bg); color: var(--info); border-color: var(--info-bdr); }
+.kd-pri.kd-ok   { background: var(--ok-bg);   color: var(--ok);   border-color: var(--ok-bdr); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .kd-pri.kd-crit { background: rgba(220,38,38,.16); }
+  :root:not([data-theme="light"]) .kd-pri.kd-warn { background: rgba(217,119,6,.16); }
+  :root:not([data-theme="light"]) .kd-pri.kd-info { background: rgba(2,132,199,.16); }
+  :root:not([data-theme="light"]) .kd-pri.kd-ok   { background: rgba(22,163,74,.16); }
+}
+:root[data-theme="dark"] .kd-pri.kd-crit { background: rgba(220,38,38,.16); }
+:root[data-theme="dark"] .kd-pri.kd-warn { background: rgba(217,119,6,.16); }
+:root[data-theme="dark"] .kd-pri.kd-info { background: rgba(2,132,199,.16); }
+:root[data-theme="dark"] .kd-pri.kd-ok   { background: rgba(22,163,74,.16); }
+.kd-rtl { color: var(--txt); }
+.kd-empty { text-align: center; color: var(--txt3); padding: 28px 12px !important; }
+.kd-tbl .img-gallery { margin: 0; }
+
 /* ── IMAGE GALLERY ─────────────────────────────────────────── */
 .img-gallery {
   display: flex;
@@ -1316,7 +1346,21 @@ td.sev-n { border-left: 3px solid transparent; }
         <span class="count-pill">3 Kendala</span>
       </div>
 
-      <div class="alert-list" id="kendala-list"></div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table class="kd-tbl">
+            <thead><tr>
+              <th style="width:38px" class="tc">No</th>
+              <th style="width:104px">Prioritas</th>
+              <th style="min-width:190px">Kendala</th>
+              <th style="min-width:240px">Keterangan</th>
+              <th style="min-width:210px">Rencana Tindak Lanjut</th>
+              <th style="min-width:170px">Foto</th>
+            </tr></thead>
+            <tbody id="kendala-list"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ═══ LAPORAN ════════════════════════════════════════════ -->
@@ -1668,17 +1712,20 @@ function renderPulang() {
 
 function renderKendala() {
   const el = document.getElementById('kendala-list');
-  el.innerHTML = KENDALA.map((k,i) => `
-    <div class="abox ${k.type}">
-      <div class="abox-ico">${k.ico}</div>
-      <div class="abox-content">
-        <div class="abox-title">${nl(k.title)}</div>
-        <div class="abox-desc">${nl(k.desc)}</div>
-        <div class="abox-rtl">📋 RTL: <span>${nl(k.rtl)}</span></div>
-        <div class="img-gallery" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.08)">${gallerySlots('kend', {nama:k.title}, ['Foto Kendala'])}        </div>
-      </div>
-    </div>
-  `).join('');
+  const PRI = { crit:['Kritis','sev-l','kd-crit'], warn:['Perhatian','sev-m','kd-warn'], info:['Info','sev-n','kd-info'], ok:['Selesai','sev-s','kd-ok'] };
+  if (!KENDALA.length) { el.innerHTML = '<tr><td colspan="6" class="kd-empty">Tidak ada kendala pelayanan tercatat.</td></tr>'; return; }
+  el.innerHTML = KENDALA.map((k,i) => {
+    const [lbl, sev, cls] = PRI[k.type] || PRI.info;
+    return `
+    <tr>
+      <td class="tc ts sev ${sev}" style="font-weight:700">${i+1}</td>
+      <td><span class="kd-pri ${cls}">${lbl}</span></td>
+      <td class="tn">${k.ico ? `<span class="kd-ico">${k.ico}</span>` : ''}${nl(k.title)}</td>
+      <td class="td">${nl(k.desc) || '<span class="ts">-</span>'}</td>
+      <td class="td kd-rtl">${nl(k.rtl) || '<span class="ts">-</span>'}</td>
+      <td><div class="img-gallery">${gallerySlots('kend', {nama:k.title}, ['Foto Kendala'])}</div></td>
+    </tr>`;
+  }).join('');
 }
 
 function renderLaporan() {
