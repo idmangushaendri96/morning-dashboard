@@ -745,7 +745,7 @@ td.sev-n { border-left: 3px solid transparent; }
 }
 
 /* KENDALA — tabel */
-.kd-tbl { min-width: 860px; }
+.kd-tbl { min-width: 980px; }
 .kd-tbl tbody td { padding: 12px; }
 .kd-tbl td.sev { border-left: 4px solid transparent; }
 .kd-tbl td.sev-l { border-left-color: var(--crit); }
@@ -755,6 +755,10 @@ td.sev-n { border-left: 3px solid transparent; }
 .kd-tbl .tn { font-size: 12.5px; line-height: 1.4; }
 .kd-tbl .td { font-size: 11.5px; line-height: 1.55; }
 .kd-ico { margin-right: 6px; }
+.kd-nopri .kd-col-pri { display: none; }
+.kd-room { display: inline-block; font-size: 11px; font-weight: 600; color: var(--navy); background: var(--info-bg); border: 1px solid var(--info-bdr); border-radius: 6px; padding: 3px 8px; line-height: 1.35; }
+:root[data-theme="dark"] .kd-room { color: var(--txt); background: rgba(2,132,199,.16); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kd-room { color: var(--txt); background: rgba(2,132,199,.16); } }
 .kd-pri { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; border: 1px solid; white-space: nowrap; }
 .kd-pri.kd-crit { background: var(--crit-bg); color: var(--crit); border-color: var(--crit-bdr); }
 .kd-pri.kd-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bdr); }
@@ -1351,9 +1355,11 @@ td.sev-n { border-left: 3px solid transparent; }
           <table class="kd-tbl">
             <thead><tr>
               <th style="width:38px" class="tc">No</th>
-              <th style="width:104px">Prioritas</th>
-              <th style="min-width:190px">Kendala</th>
-              <th style="min-width:240px">Keterangan</th>
+              <th style="width:86px">Tanggal</th>
+              <th style="min-width:130px">Ruangan</th>
+              <th class="kd-col-pri" style="width:104px">Prioritas</th>
+              <th style="min-width:230px">Kendala</th>
+              <th style="width:90px">Jam</th>
               <th style="min-width:210px">Rencana Tindak Lanjut</th>
               <th style="min-width:170px">Foto</th>
             </tr></thead>
@@ -1506,7 +1512,7 @@ const PULANG = [
 ];
 
 const KENDALA = [
-  {type:'crit', ico:'🔧', title:'Ventilator Mekanik ICU — Tidak Berfungsi', desc:'1 unit ventilator ruang ICU tidak berfungsi sejak kemarin malam (14/10). Saat ini 1 pasien masih menggunakan unit yang tersisa. Bila ada penambahan pasien kritis perlu ventilasi mekanik, kapasitas terbatas.', rtl:'Sudah dilaporkan ke IPSRS jam 22:00. Target perbaikan hari ini. Sementara koordinasi dengan ICU RSMH bila diperlukan rujukan.'},
+  {type:'crit', ruangan:'ICU', tgl:'14/10/2026', jam:'', ico:'🔧', title:'Ventilator Mekanik ICU — Tidak Berfungsi', desc:'1 unit ventilator ruang ICU tidak berfungsi sejak kemarin malam (14/10). Saat ini 1 pasien masih menggunakan unit yang tersisa. Bila ada penambahan pasien kritis perlu ventilasi mekanik, kapasitas terbatas.', rtl:'Sudah dilaporkan ke IPSRS jam 22:00. Target perbaikan hari ini. Sementara koordinasi dengan ICU RSMH bila diperlukan rujukan.'},
   {type:'warn', ico:'💊', title:'Stok Ceftriaxone 1g Menipis — Tersisa ~20 Vial', desc:'Stok antibiotik Ceftriaxone 1g tersisa ±20 vial. Kebutuhan harian ±15 vial. Estimasi habis besok pagi bila tidak ditambah. Beberapa pasien terkait (sepsis, ICU) bergantung pada obat ini.', rtl:'Sudah diorder ke gudang farmasi jam 06:30. Estimasi tiba sore ini. Konfirmasi ke apoteker bu Lilik.'},
   {type:'info', ico:'❄️', title:'AC Ruang 204 MUSI Rusak', desc:'AC ruang 204 tidak berfungsi, suhu ruangan mencapai 32°C. Terdapat 3 pasien di kamar tersebut. Pasien mengeluhkan tidak nyaman.', rtl:'Lapor fasum jam 07:00. Sementara disediakan kipas angin portable. Target perbaikan 2 hari kerja.'},
 ];
@@ -1713,15 +1719,19 @@ function renderPulang() {
 function renderKendala() {
   const el = document.getElementById('kendala-list');
   const PRI = { crit:['Kritis','sev-l','kd-crit'], warn:['Perhatian','sev-m','kd-warn'], info:['Info','sev-n','kd-info'], ok:['Selesai','sev-s','kd-ok'] };
-  if (!KENDALA.length) { el.innerHTML = '<tr><td colspan="6" class="kd-empty">Tidak ada kendala pelayanan tercatat.</td></tr>'; return; }
+  const showPri = KENDALA.some(k => k.hasType !== false && k.type && k.type !== 'info');
+  document.getElementById('sec-kendala').classList.toggle('kd-nopri', !showPri);
+  if (!KENDALA.length) { el.innerHTML = '<tr><td colspan="8" class="kd-empty">Tidak ada kendala pelayanan tercatat.</td></tr>'; return; }
   el.innerHTML = KENDALA.map((k,i) => {
     const [lbl, sev, cls] = PRI[k.type] || PRI.info;
     return `
     <tr>
       <td class="tc ts sev ${sev}" style="font-weight:700">${i+1}</td>
-      <td><span class="kd-pri ${cls}">${lbl}</span></td>
-      <td class="tn">${k.ico ? `<span class="kd-ico">${k.ico}</span>` : ''}${nl(k.title)}</td>
-      <td class="td">${nl(k.desc) || '<span class="ts">-</span>'}</td>
+      <td class="ts" style="white-space:nowrap">${k.tgl || '-'}</td>
+      <td>${k.ruangan ? `<span class="kd-room">${nl(k.ruangan)}</span>` : '<span class="ts">-</span>'}</td>
+      <td class="kd-col-pri"><span class="kd-pri ${cls}">${lbl}</span></td>
+      <td class="tn">${k.ico ? `<span class="kd-ico">${k.ico}</span>` : ''}${nl(k.title)}${k.desc ? `<div class="td" style="font-weight:400;margin-top:3px">${nl(k.desc)}</div>` : ''}</td>
+      <td class="ts" style="white-space:nowrap">${k.jam || '-'}</td>
       <td class="td kd-rtl">${nl(k.rtl) || '<span class="ts">-</span>'}</td>
       <td><div class="img-gallery">${gallerySlots('kend', {nama:k.title}, ['Foto Kendala'])}</div></td>
     </tr>`;
@@ -2735,10 +2745,14 @@ async function loadFromSheets() {
       KENDALA.splice(0, KENDALA.length, ...kRows.map(r => ({
         // Supports both "clean" column names (Judul, Deskripsi, RTL) and
         // original CAPS format: JENIS KENDALA→JENISKENDALA, RENCANA TINDAK LANJUT→RENCANATINDAKLANJUT
-        type: (r.Type || r.JENISKENDALA || 'info').toLowerCase(),
+        type: (r.Type || 'info').toLowerCase(),
+        hasType: !!r.Type,
+        ruangan: r.Ruangan || r.RUANGAN || '',
+        tgl: r.Tanggal || r.TANGGAL || '',
+        jam: r.Jamkejadian || r.JAMKEJADIAN || '',
         ico: r.Icon || '',
         title: r.Judul || r.JENISKENDALA || r.RUANGAN || '',
-        desc: r.Deskripsi || r.Jamkejadian || '',
+        desc: r.Deskripsi || '',
         rtl: r.RTL || r.RENCANATINDAKLANJUT || '',
       })));
     }
