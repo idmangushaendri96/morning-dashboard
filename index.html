@@ -697,6 +697,25 @@ td.sev-n { border-left: 3px solid transparent; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── MODE PRESENTASI (tulisan besar untuk proyektor/TV) ──────── */
+.pres-btn { cursor: pointer; font-family: inherit; }
+.pres-btn:hover { border-color: var(--blue); color: var(--blue); }
+body.pres .pres-btn { background: var(--blue); border-color: var(--blue); color: #fff; }
+.pres-ctl { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--txt2); }
+.pres-ctl[hidden] { display: none; }
+.pres-ctl button { cursor: pointer; font: 700 12px inherit; font-family: inherit; background: var(--surf2); border: 1px solid var(--bdr); color: var(--txt); border-radius: 6px; padding: 4px 9px; }
+.pres-ctl button:hover { border-color: var(--blue); color: var(--blue); }
+body.pres .content { zoom: var(--pz, 1.4); }
+body.pres .sidebar { transform: translateX(-100%); }
+body.pres .sidebar.open { transform: none; }
+body.pres .overlay.open { display: block; }
+body.pres .main { margin-left: 0; }
+body.pres .tb-ham { display: block; }
+body.pres tbody td { padding-top: 12px; padding-bottom: 12px; }
+body.pres .ts, body.pres .td, body.pres .sd-label { color: var(--txt2); }
+body.pres .ts { font-size: 11.5px; }
+body.pres .td { font-size: 12px; }
+
 /* ── UTILS ─────────────────────────────────────────────────── */
 .mb14 { margin-bottom: 14px; }
 .mb20 { margin-bottom: 20px; }
@@ -1071,6 +1090,12 @@ td.sev-n { border-left: 3px solid transparent; }
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="var(--green)" stroke-width="1.5"/><path d="M6 3v3l2 1" stroke="var(--green)" stroke-width="1.2" stroke-linecap="round"/></svg>
         Shift Pagi
       </div>
+      <div class="pres-ctl" id="pres-ctl" hidden>
+        <button type="button" id="pres-minus" title="Perkecil tulisan" aria-label="Perkecil tulisan">A−</button>
+        <span id="pres-lvl">140%</span>
+        <button type="button" id="pres-plus" title="Perbesar tulisan" aria-label="Perbesar tulisan">A+</button>
+      </div>
+      <button type="button" class="tb-chip pres-btn" id="pres-btn" title="Mode Presentasi (tombol P)">🖥 Presentasi</button>
       <div class="tb-chip" id="live-time">07:30 WIB</div>
     </div>
   </header>
@@ -2175,6 +2200,32 @@ document.getElementById('overlay').addEventListener('click', () => {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
 });
+
+// ── MODE PRESENTASI ────────────────────────────────────────
+(function () {
+  const LV = [1.2, 1.4, 1.6, 1.8, 2.0, 2.3];
+  let on = false, idx = 1;
+  try { on = localStorage.getItem('pres') === '1'; const v = parseInt(localStorage.getItem('presLv'), 10); if (v >= 0 && v < LV.length) idx = v; } catch (e) {}
+  function apply() {
+    document.body.classList.toggle('pres', on);
+    document.documentElement.style.setProperty('--pz', LV[idx]);
+    document.getElementById('pres-ctl').hidden = !on;
+    document.getElementById('pres-lvl').textContent = Math.round(LV[idx] * 100) + '%';
+    try { localStorage.setItem('pres', on ? '1' : '0'); localStorage.setItem('presLv', idx); } catch (e) {}
+    if (!on) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('open'); }
+  }
+  document.getElementById('pres-btn').addEventListener('click', () => { on = !on; apply(); });
+  document.getElementById('pres-plus').addEventListener('click', () => { idx = Math.min(LV.length - 1, idx + 1); apply(); });
+  document.getElementById('pres-minus').addEventListener('click', () => { idx = Math.max(0, idx - 1); apply(); });
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea, select') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'p' || e.key === 'P') { on = !on; apply(); }
+    else if (on && (e.key === '+' || e.key === '=')) { idx = Math.min(LV.length - 1, idx + 1); apply(); }
+    else if (on && (e.key === '-' || e.key === '_')) { idx = Math.max(0, idx - 1); apply(); }
+    else if (on && e.key === 'Escape') { on = false; apply(); }
+  });
+  apply();
+})();
 
 // ── LIVE TIME ──────────────────────────────────────────────
 
