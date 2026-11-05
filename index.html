@@ -712,6 +712,11 @@ td.sev-n { border-left: 3px solid transparent; }
 .soap-l.l-O { background: var(--surf2); color: var(--navy); border-color: var(--bdr); }
 .soap-l.l-A { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bdr); }
 .soap-l.l-P { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bdr); }
+.soap-sub { grid-column: 1 / -1; font-size: 10.5px; font-weight: 800; color: var(--navy); text-transform: uppercase; letter-spacing: .05em; padding-top: 6px; border-top: 1px dashed var(--bdr); }
+.soap-g > .soap-sub:first-child { padding-top: 0; border-top: 0; }
+.soap-note { grid-column: 1 / -1; font-size: 11px; line-height: 1.55; color: var(--txt2); }
+:root[data-theme="dark"] .soap-sub { color: var(--txt); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .soap-sub { color: var(--txt); } }
 .fu-timeline .soap-g { gap: 4px 8px; }
 .fu-timeline .soap-t, .fu-timeline .soap-plain { font-size: 11px; color: var(--txt2); }
 .fu-hist { margin-top: 14px; border: 1px solid var(--bdr); border-radius: 8px; overflow: hidden; background: var(--surf); }
@@ -1684,28 +1689,36 @@ function renderPerhatian() {
 
 const nl = v => String(v ?? '').trim().replace(/\r?\n/g, '<br>');
 
-// SOAP terstruktur: pecah teks pada penanda S/ O/ A/ P/ (atau S: O: A: P:) di awal baris
+// SOAP terstruktur: tiap baris yang diawali S/ O/ A/ P/ (atau S: …) memulai bagian baru.
+// Baris seperti "Pukul 20.00 (dokter jaga)", "DPJP …", "No. RM …" menjadi subjudul (visit berbeda dalam 1 hari).
+const SOAP_MARK = /^\s*([SOAP])\s*[\/:]\s*(.*)$/;
+const SOAP_HEAD = /^\s*(pukul\s*\d|jam\s*\d|dpjp\b|dokter jaga|visit\b|no\.?\s*rm\b|resume\b)/i;
 function soapParts(v) {
-  const t = String(v ?? '').trim();
+  const t = String(v ?? '').replace(/\r/g, '').trim();
   if (!t) return null;
-  const re = /(^|\n)\s*([SOAPsoap])\s*[\/:]\s*/g;
-  const marks = []; let m;
-  while ((m = re.exec(t))) marks.push({ k: m[2].toUpperCase(), at: m.index + m[1].length, body: re.lastIndex });
-  if (!marks.length) return null;
-  const parts = [];
-  if (marks[0].at > 0) parts.push({ k: '', v: t.slice(0, marks[0].at).trim() });
-  marks.forEach((mk, i) => parts.push({ k: mk.k, v: t.slice(mk.body, i + 1 < marks.length ? marks[i + 1].at : t.length).trim() }));
-  return parts.filter(x => x.v);
+  const parts = []; let cur = null, hasMark = false;
+  t.split('\n').forEach(line => {
+    const m = line.match(SOAP_MARK);
+    if (m) { hasMark = true; cur = { k: m[1], v: m[2] }; parts.push(cur); return; }
+    if (SOAP_HEAD.test(line)) { cur = { k: 'H', h: line.trim(), v: '' }; parts.push(cur); return; }
+    if (!cur) { cur = { k: '', v: line }; parts.push(cur); return; }
+    cur.v += '\n' + line;
+  });
+  if (!hasMark) return null;
+  parts.forEach(x => { x.v = x.v.replace(/\n\s*\n+/g, '\n').trim(); });
+  return parts.filter(x => x.v || x.h);
 }
 function soapHTML(v) {
   const parts = soapParts(v);
   if (!parts) return String(v ?? '').trim() ? `<div class="soap-plain">${nl(v)}</div>` : '<span class="ts">-</span>';
-  return `<div class="soap-g">${parts.map(x => `<span class="soap-l ${x.k ? 'l-' + x.k : ''}">${x.k || '•'}</span><div class="soap-t">${nl(x.v)}</div>`).join('')}</div>`;
+  return `<div class="soap-g">${parts.map(x => x.k === 'H'
+    ? `<div class="soap-sub">${nl(x.h)}</div>${x.v ? `<div class="soap-note">${nl(x.v)}</div>` : ''}`
+    : `<span class="soap-l ${x.k ? 'l-' + x.k : ''}">${x.k || '•'}</span><div class="soap-t">${nl(x.v)}</div>`).join('')}</div>`;
 }
-function soapPreview(v) {          // ringkas untuk baris tabel: Assessment bila ada, kalau tidak baris pertama
+function soapPreview(v) {          // ringkas untuk baris tabel: Assessment terakhir bila ada
   const parts = soapParts(v);
   if (!parts) return nl(v);
-  const a = parts.find(x => x.k === 'A') || parts[0];
+  const a = [...parts].reverse().find(x => x.k === 'A') || parts.find(x => x.k && x.k !== 'H') || parts[0];
   return `<span class="soap-l sm ${a.k ? 'l-' + a.k : ''}">${a.k || '•'}</span> ${nl(a.v)}`;
 }
 
