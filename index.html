@@ -1319,7 +1319,7 @@ img.mm-art { width: auto; height: 172px; max-width: 34%; object-fit: contain; ma
           <div class="card-hdr">
             <div class="card-title">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 11.5 L4 7 L7 9 L10 4 L13 6" stroke="var(--navy)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Tren BOR &amp; IGD — 15 Hari Terakhir
+              Tren BOR — 15 Hari Terakhir
             </div>
             <span class="card-pill">Okt 1–15</span>
           </div>
@@ -2091,10 +2091,11 @@ function renderChart() {
 
   // Skala dinamis: BOR dibatasi ≤100%, bawah mengikuti data; IGD ada ruang di atas batang tertinggi
   const _b = (BOR_TREND.bor || []).filter(v => v != null && !isNaN(v));
-  const BOR_MIN = _b.length ? Math.max(0, Math.floor((Math.min(..._b) - 10) / 10) * 10) : 0;
-  const BOR_MAX = Math.max(100, _b.length ? Math.ceil(Math.max(..._b) / 10) * 10 : 100);
-  const _i = (BOR_TREND.igd || []).filter(v => v != null && !isNaN(v));
-  const IGD_MAX = _i.length ? Math.ceil(Math.max(..._i) * 1.25 / 10) * 10 : 50;
+  const _ib = IND.find(i => i.id === 'bor');
+  const BOR_T = _ib && _ib.tM != null && !isNaN(_ib.tM) ? +_ib.tM : null;   // target bulanan BOR (tab Target)
+  const _lo = Math.min(..._b, BOR_T ?? Infinity), _hi = Math.max(..._b, BOR_T ?? -Infinity);
+  const BOR_MIN = isFinite(_lo) ? Math.max(0, Math.floor((_lo - 10) / 10) * 10) : 0;
+  const BOR_MAX = Math.max(100, isFinite(_hi) ? Math.ceil(_hi / 10) * 10 : 100);
 
   if (window._borChart) window._borChart.destroy();
 
@@ -2107,30 +2108,31 @@ function renderChart() {
           label: 'BOR (%)',
           data: BOR_TREND.bor,
           yAxisID: 'y1',
-          borderColor: '#1B4F8B',
-          backgroundColor: 'rgba(27,79,139,.12)',
+          borderColor: isDark ? '#6FA8E8' : '#1B4F8B',
+          backgroundColor: isDark ? 'rgba(111,168,232,.12)' : 'rgba(27,79,139,.12)',
           borderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
           pointBorderColor: isDark ? '#0D1C33' : '#fff',
           pointBorderWidth: 2,
-          pointBackgroundColor: '#1B4F8B',
+          pointBackgroundColor: isDark ? '#6FA8E8' : '#1B4F8B',
           fill: true,
           cubicInterpolationMode: 'monotone',
           spanGaps: true,
         },
-        {
-          type: 'bar',
-          label: 'Pasien IGD',
-          data: BOR_TREND.igd,
-          yAxisID: 'y2',
-          backgroundColor: 'rgba(93,182,51,.5)',
-          borderColor: 'rgba(93,182,51,.8)',
-          borderWidth: 1,
-          borderRadius: 4,
-          maxBarThickness: 34,
-          order: 2,
-        }
+        ...(BOR_T != null ? [{
+          type: 'line',
+          label: `Target bulanan ${BOR_T}%`,
+          data: BOR_TREND.labels.map(() => BOR_T),
+          yAxisID: 'y1',
+          borderColor: '#D97706',
+          borderWidth: 2,
+          borderDash: [6, 5],
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          order: 0,
+        }] : []),
       ]
     },
     options: {
@@ -2154,8 +2156,11 @@ function renderChart() {
           padding: 10,
           callbacks: {
             label(ctx) {
-              if(ctx.dataset.label==='BOR (%)') return ` BOR: ${ctx.parsed.y}%`;
-              return ` IGD: ${ctx.parsed.y} kunjungan`;
+              if (ctx.dataset.label === 'BOR (%)') {
+                const d = BOR_T != null ? Math.round((ctx.parsed.y - BOR_T) * 10) / 10 : null;
+                return ` BOR: ${ctx.parsed.y}%` + (d != null ? `  (${d >= 0 ? '+' : ''}${d} poin vs target)` : '');
+              }
+              return ` Target bulanan: ${ctx.parsed.y}%`;
             }
           }
         }
@@ -2170,12 +2175,6 @@ function renderChart() {
           min: BOR_MIN, max: BOR_MAX,
           grid: { color: gridC },
           ticks: { color: tickC, font: { size:9.5 }, callback: v => v+'%' }
-        },
-        y2: {
-          position: 'right',
-          min: 0, suggestedMax: IGD_MAX, beginAtZero: true,
-          grid: { display: false },
-          ticks: { color: tickC, font: { size:9.5 } }
         }
       }
     }
