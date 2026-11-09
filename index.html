@@ -425,6 +425,8 @@ nav { flex: 1; padding: 8px 0; overflow-y: auto; }
 /* ── CHART ─────────────────────────────────────────────────── */
 .chart-wrap { position: relative; height: 100%; min-height: 300px; }
 .chart-card { display: flex; flex-direction: column; }
+.chart-wrap.chart-sm { min-height: 240px; height: 240px; }
+@media (max-width: 900px) { .g22 { grid-template-columns: 1fr; } }
 .chart-card .card-body { flex: 1; min-height: 0; padding: 14px 16px 12px; }
 
 /* ── BED GRID ──────────────────────────────────────────────── */
@@ -1345,6 +1347,38 @@ img.mm-art { width: auto; height: 172px; max-width: 34%; object-fit: contain; ma
       </div>
 
 
+      <!-- TREN AVLOS + KUNJUNGAN IGD -->
+      <div class="g22 mb14">
+        <div class="card chart-card">
+          <div class="card-hdr">
+            <div class="card-title">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 11.5 L4 7 L7 9 L10 4 L13 6" stroke="#0E7490" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Tren AVLOS — 15 Hari Terakhir
+            </div>
+            <span class="card-pill">15 hari</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrap chart-sm">
+              <canvas id="avlos-chart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-hdr">
+            <div class="card-title">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 11.5 L4 7 L7 9 L10 4 L13 6" stroke="#4A9228" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Tren Kunjungan IGD — 15 Hari Terakhir
+            </div>
+            <span class="card-pill">15 hari</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrap chart-sm">
+              <canvas id="igd-chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- LAPORAN OPERASIONAL TABLE -->
       <div class="card" style="margin-top:14px">
         <div class="card-hdr">
@@ -1607,7 +1641,8 @@ img.mm-art { width: auto; height: 172px; max-width: 34%; object-fit: contain; ma
 let BOR_TREND = {
   labels: ['1/10','2/10','3/10','4/10','5/10','6/10','7/10','8/10','9/10','10/10','11/10','12/10','13/10','14/10','15/10'],
   bor:    [100, 88, 94, 92, 86, 78, 100, 100, 100, 100, 100, 100, 80, 83, 84],
-  igd:    [33,  37, 29, 27, 43, 39, 45,  42,  42,  32,  26,  42,  35, 40, 32]
+  igd:    [33,  37, 29, 27, 43, 39, 45,  42,  42,  32,  26,  42,  35, 40, 32],
+  avlos:  [3.1, 2.8, 3.0, 3.4, 2.9, 2.7, 3.2, 3.5, 3.3, 3.0, 2.8, 3.1, 3.3, 3.2, 3.1]
 };
 
 const BEDS = [
@@ -2079,103 +2114,72 @@ function renderBeds() {
 
 // ── CHART ─────────────────────────────────────────────────
 
+// Grafik tren 15 hari: BOR (target bulanan), AVLOS & Kunjungan IGD (target harian)
 function renderChart() {
   const isDark = document.documentElement.dataset.theme === 'dark' ||
     (!document.documentElement.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
-
-  const gridC = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
-  const tickC = isDark ? '#3D6080' : '#8EA8C3';
-  const labelC = isDark ? '#7FA4C4' : '#4B6080';
-
-  const ctx = document.getElementById('bor-chart').getContext('2d');
-
-  // Skala dinamis: BOR dibatasi ≤100%, bawah mengikuti data; IGD ada ruang di atas batang tertinggi
-  const _b = (BOR_TREND.bor || []).filter(v => v != null && !isNaN(v));
-  const _ib = IND.find(i => i.id === 'bor');
-  const BOR_T = _ib && _ib.tM != null && !isNaN(_ib.tM) ? +_ib.tM : null;   // target bulanan BOR (tab Target)
-  const _lo = Math.min(..._b, BOR_T ?? Infinity), _hi = Math.max(..._b, BOR_T ?? -Infinity);
-  const BOR_MIN = isFinite(_lo) ? Math.max(0, Math.floor((_lo - 10) / 10) * 10) : 0;
-  const BOR_MAX = Math.max(100, isFinite(_hi) ? Math.ceil(_hi / 10) * 10 : 100);
-
-  if (window._borChart) window._borChart.destroy();
-
-  window._borChart = new Chart(ctx, {
+  const T = id => IND.find(i => i.id === id) || {};
+  const num = v => v != null && !isNaN(v) ? +v : null;
+  trendChart({ id: 'bor-chart', key: 'bor', name: 'BOR', unit: '%', dec: 1, diffUnit: ' poin',
+    target: num(T('bor').tM), tLabel: 'Target bulanan', clampMax: 100, step: 10, fmt: v => v + '%',
+    color: isDark ? '#6FA8E8' : '#1B4F8B', fill: true, isDark });
+  trendChart({ id: 'avlos-chart', key: 'avlos', name: 'AVLOS', unit: ' hr', dec: 1, diffUnit: ' hari',
+    target: num(T('avlos').tH), tLabel: 'Target harian', step: 1, fmt: v => v + ' hr',
+    color: isDark ? '#2CC5DB' : '#0E7490', fill: true, isDark });
+  trendChart({ id: 'igd-chart', key: 'igd', name: 'Kunjungan IGD', unit: '', dec: 0, diffUnit: ' kunjungan',
+    target: num(T('igd').tH), tLabel: 'Target harian', step: 10, fmt: v => v,
+    color: isDark ? '#86CC57' : '#4A9228', fill: true, isDark });
+}
+function trendChart(o) {
+  const el = document.getElementById(o.id); if (!el || !window.Chart) return;
+  const gridC = o.isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+  const tickC = o.isDark ? '#3D6080' : '#8EA8C3';
+  const labelC = o.isDark ? '#7FA4C4' : '#4B6080';
+  const data = (BOR_TREND[o.key] || []).map(v => v == null || isNaN(v) ? null : +v);
+  const vals = data.filter(v => v != null);
+  const lo = Math.min(...vals, o.target ?? Infinity), hi = Math.max(...vals, o.target ?? -Infinity);
+  const st = o.step;
+  const yMin = isFinite(lo) ? Math.max(0, Math.floor((lo - st) / st) * st) : 0;
+  let yMax = isFinite(hi) ? Math.ceil((hi + st * .5) / st) * st : st * 5;
+  if (o.clampMax) yMax = Math.min(Math.max(yMax, o.clampMax), Math.max(o.clampMax, Math.ceil(hi / st) * st));
+  const hex = o.color.replace('#', ''), rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
+  window._charts = window._charts || {};
+  if (window._charts[o.id]) window._charts[o.id].destroy();
+  const font = { family: 'Plus Jakarta Sans', size: 11 };
+  window._charts[o.id] = new Chart(el.getContext('2d'), {
     data: {
       labels: BOR_TREND.labels,
       datasets: [
-        {
-          type: 'line',
-          label: 'BOR (%)',
-          data: BOR_TREND.bor,
-          yAxisID: 'y1',
-          borderColor: isDark ? '#6FA8E8' : '#1B4F8B',
-          backgroundColor: isDark ? 'rgba(111,168,232,.12)' : 'rgba(27,79,139,.12)',
-          borderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBorderColor: isDark ? '#0D1C33' : '#fff',
-          pointBorderWidth: 2,
-          pointBackgroundColor: isDark ? '#6FA8E8' : '#1B4F8B',
-          fill: true,
-          cubicInterpolationMode: 'monotone',
-          spanGaps: true,
-        },
-        ...(BOR_T != null ? [{
-          type: 'line',
-          label: `Target bulanan ${BOR_T}%`,
-          data: BOR_TREND.labels.map(() => BOR_T),
-          yAxisID: 'y1',
-          borderColor: '#D97706',
-          borderWidth: 2,
-          borderDash: [6, 5],
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          fill: false,
-          order: 0,
-        }] : []),
+        { type: 'line', label: o.name, data, borderColor: o.color, backgroundColor: `rgba(${rgb},.12)`,
+          borderWidth: 2, pointRadius: 3.5, pointHoverRadius: 6, pointBackgroundColor: o.color,
+          pointBorderColor: o.isDark ? '#0D1C33' : '#fff', pointBorderWidth: 2,
+          fill: o.fill, cubicInterpolationMode: 'monotone', spanGaps: true, order: 1 },
+        ...(o.target != null ? [{ type: 'line', label: `${o.tLabel} ${o.fmt(o.target)}`,
+          data: BOR_TREND.labels.map(() => o.target), borderColor: '#D97706', borderWidth: 2,
+          borderDash: [6, 5], pointRadius: 0, pointHoverRadius: 0, fill: false, order: 0, isTarget: true }] : []),
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          position: 'top',
-          align: 'end',
-          labels: { color: labelC, boxWidth: 12, padding: 12, font: { family: 'Plus Jakarta Sans', size: 11 } }
-        },
+        legend: { position: 'top', align: 'end', labels: { color: labelC, boxWidth: 12, padding: 12, font } },
         tooltip: {
-          backgroundColor: isDark ? '#0D1C33' : '#fff',
-          borderColor: isDark ? '#1B3050' : '#DDE4EF',
-          borderWidth: 1,
-          titleColor: isDark ? '#D8E8F8' : '#0D1A2D',
-          bodyColor: isDark ? '#7FA4C4' : '#4B6080',
-          titleFont: { family:'Plus Jakarta Sans', size:11, weight:'bold' },
-          bodyFont: { family:'Plus Jakarta Sans', size:11 },
-          padding: 10,
+          backgroundColor: o.isDark ? '#0D1C33' : '#fff', borderColor: o.isDark ? '#1B3050' : '#DDE4EF', borderWidth: 1,
+          titleColor: o.isDark ? '#D8E8F8' : '#0D1A2D', bodyColor: o.isDark ? '#7FA4C4' : '#4B6080',
+          titleFont: { ...font, weight: 'bold' }, bodyFont: font, padding: 10,
           callbacks: {
-            label(ctx) {
-              if (ctx.dataset.label === 'BOR (%)') {
-                const d = BOR_T != null ? Math.round((ctx.parsed.y - BOR_T) * 10) / 10 : null;
-                return ` BOR: ${ctx.parsed.y}%` + (d != null ? `  (${d >= 0 ? '+' : ''}${d} poin vs target)` : '');
-              }
-              return ` Target bulanan: ${ctx.parsed.y}%`;
+            label(c) {
+              if (c.dataset.isTarget) return ` ${o.tLabel}: ${o.fmt(c.parsed.y)}`;
+              const f = 10 ** o.dec, d = o.target != null ? Math.round((c.parsed.y - o.target) * f) / f : null;
+              return ` ${o.name}: ${o.fmt(c.parsed.y)}` + (d != null ? `  (${d >= 0 ? '+' : ''}${d}${o.diffUnit} vs target)` : '');
             }
           }
         }
       },
       scales: {
-        x: {
-          grid: { color: gridC },
-          ticks: { color: tickC, font: { family:'Plus Jakarta Sans', size:9.5 }, maxRotation: 0 }
-        },
-        y1: {
-          position: 'left',
-          min: BOR_MIN, max: BOR_MAX,
-          grid: { color: gridC },
-          ticks: { color: tickC, font: { size:9.5 }, callback: v => v+'%' }
-        }
+        x: { grid: { color: gridC }, ticks: { color: tickC, font: { ...font, size: 9.5 }, maxRotation: 0 } },
+        y: { min: yMin, max: yMax, grid: { color: gridC }, ticks: { color: tickC, font: { size: 9.5 }, callback: v => o.fmt(v) } }
       }
     }
   });
@@ -2769,7 +2773,7 @@ function updateCounts() {
   // Pill kartu Ringkasan: indikator, rentang grafik, tempat tidur kosong
   const cardPill = id => document.getElementById(id)?.closest('.card')?.querySelector('.card-pill');
   const pI = cardPill('tbody-operasional'); if (pI) pI.textContent = `${OPERASIONAL.length} Indikator`;
-  const pC = cardPill('bor-chart'); if (pC && BOR_TREND.labels.length) pC.textContent = `${BOR_TREND.labels[0]} – ${BOR_TREND.labels[BOR_TREND.labels.length-1]}`;
+  ['bor-chart', 'avlos-chart', 'igd-chart'].forEach(id => { const pC = cardPill(id); if (pC && BOR_TREND.labels.length) pC.textContent = `${BOR_TREND.labels[0]} – ${BOR_TREND.labels[BOR_TREND.labels.length-1]}`; });
   const pB = cardPill('bed-grid'); if (pB) pB.textContent = `${BEDS.reduce((a,b)=>a+(b.kosong||0),0)} TT kosong`;
   // Pill Meninggal & Rujuk
   const pills = document.querySelectorAll('#sec-laporan .card-pill');
@@ -2870,7 +2874,8 @@ function applyDaily(daily) {
   BOR_TREND = {
     labels: last.map(r => String(r.date.getDate()).padStart(2,'0') + '/' + String(r.date.getMonth()+1).padStart(2,'0')),
     bor: last.map(r => r.bor == null ? null : +r.bor.toFixed(1)),
-    igd: last.map(r => r.igd == null ? 0 : r.igd),
+    igd: last.map(r => r.igd == null ? null : r.igd),
+    avlos: last.map(r => r.avlos == null ? null : +r.avlos.toFixed(1)),
   };
   // Tanggal data terbaru → subjudul Ringkasan
   const txt = 'Data per ' + L.date.toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'});
