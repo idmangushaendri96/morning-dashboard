@@ -2639,9 +2639,13 @@ function parseCSV(text) {
 
 // Konversi baris CSV (skip header row 1 = catatan, row 2 = spacer, row 3 = header label)
 function csvToObjects(rows) {
-  if (rows.length < 4) return [];
-  const headers = rows[2].map(h => h.replace(/[^a-zA-Z0-9_]/g,''));
-  return rows.slice(3).filter(r => r.some(c => c !== '')).map(r => {
+  // Baris judul kolom = baris pertama (dari 10 teratas) yang berisi ≥3 sel; tahan bila ada baris
+  // disisipkan/dihapus di atas tabel. Bila tidak ketemu, pakai baris ke-3 seperti format standar.
+  let h = rows.slice(0, 10).findIndex(r => r.filter(c => String(c).trim() !== '').length >= 3);
+  if (h < 0) h = 2;
+  if (rows.length < h + 2) return [];
+  const headers = rows[h].map(x => x.replace(/[^a-zA-Z0-9_]/g,''));
+  return rows.slice(h + 1).filter(r => r.some(c => c !== '')).map(r => {
     const obj = {};
     headers.forEach((h,i) => obj[h] = (r[i] || '').trim());
     return obj;
